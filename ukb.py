@@ -16,7 +16,7 @@
 """Auxiliary functions to run the UK Biobank.
 
 References:
-https://github.com/Google-Health/genomics-research/tree/main/ml-based-vcdr
+https://github.com/Google-Health/genomics-research/tree/main/ml-based-vcdrhttps://github.com/Google-Health/genomics-research/tree/main/ml-based-vcdr
 https://keras.io/examples/keras_recipes/creating_tfrecords/
 """
 import concurrent.futures
@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
-from tensorflow import gfile
+from tensorflow.io import gfile
 
 from icetea import ukb_utils
 
@@ -395,8 +395,7 @@ def join_tfrecord_csv(path_simulations,
             ids_to_encoded[image_id] = image_encoded
         return ids_to_encoded
 
-    def _map_ukb_id_to_encoded_images(
-            ukb_tfrecord_path):
+    def _map_ukb_id_to_encoded_images(ukb_tfrecord_path):
         """Returns a dictionary of encoded image tensors keyed on image id."""
         # Load and parse the TFRecords located at `ukb_tfrecord_path`.
         outcome_features = _build_ukb_tfrecord_features()

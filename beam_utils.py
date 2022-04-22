@@ -22,9 +22,9 @@ from icetea import utils
 
 def data(pipeline_seed, pipeline_data):
     if pipeline_data['data_name'] != 'ukb':
-        return utils.DataSimulation(seed=pipeline_seed, param_data=pipeline_data)
+        return utils.NonImageData(seed=pipeline_seed, param_data=pipeline_data)
     else:
-        return utils.LoadImages(seed=pipeline_seed, param_data=pipeline_data)
+        return utils.ImageData(seed=pipeline_seed, param_data=pipeline_data)
 
 
 def organize_param_methods(pipeline_data, param_methods):
