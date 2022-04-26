@@ -21,10 +21,10 @@ from icetea import utils
 
 
 def data(pipeline_seed, pipeline_data):
-    if pipeline_data['data_name'] != 'ukb':
-        return utils.NonImageData(seed=pipeline_seed, param_data=pipeline_data)
-    else:
+    if pipeline_data['is_Image']:
         return utils.ImageData(seed=pipeline_seed, param_data=pipeline_data)
+    else:
+        return utils.NonImageData(seed=pipeline_seed, param_data=pipeline_data)
 
 
 def organize_param_methods(pipeline_data, param_methods):

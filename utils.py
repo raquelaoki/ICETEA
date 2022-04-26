@@ -63,6 +63,7 @@ class NonImageData:
         self.seed = seed
         self.param_data = param_data
         self.name = param_data['data_name']
+        self.is_Image = param_data.get('is_Image',False)
         self.splitted = False
         if self.name == 'IHDP':
             self._load_ihdp()
@@ -188,9 +189,20 @@ class NonImageData:
         self.tau = true_ate_row['trueATE'].values[0]
 
 
+def repeat_experiment(data, param_method):
+    repetitions = param_method.get('repetitions',1)
+    for b in range(repetitions):
+        resul, columns = experiments(data=data, seed=b, param_method=param_method)
+        if b==0:
+            tab = pd.DataFrame(columns=columns)
+            tab = tab.append(resul, ignore_index=True)
+        else:
+            tab = tab.append(resul, ignore_index=True)
+    return tab
+
+
 def experiments(data, seed, param_method):
     """Function to run experiments.
-
   Args:
     data: DataSimulation obj.
     seed: currently not used.
@@ -199,12 +211,29 @@ def experiments(data, seed, param_method):
     Dictionary with simulation results.
     col names
   """
-    del seed
+    #del seed
     start = time.time()
     estimator = param_method['estimator']
     param_grid = param_method['param_grid']
-    tau_, mse, bias, var_tau = estimator(data, param_method, param_grid)
-    if data.name != 'ukb':
+    tau_, mse, bias, var_tau = estimator(data, param_method, param_grid,
+                                         type=param_method['name_estimator'],
+                                         seed=seed)
+    if data.is_Image:
+        tab = {
+            't_est': tau_,
+            'mse0': mse[0],
+            'mse1': mse[1],
+            'bias0': bias[0],
+            'bias1': bias[1],
+            'variance': var_tau,
+            'data_name': data.name,
+            'seed': seed,
+            'method_estimator': param_method['name_estimator'],
+            'method_base_model': param_method['name_base_model'],
+            'method_metric': param_method['name_metric'],
+            'time': time.time() - start,
+        }
+    else:
         tab = {
             't_est': tau_,
             't_real': data.tau,
@@ -226,21 +255,7 @@ def experiments(data, seed, param_method):
             'method_prop_score': param_method['name_prop_score'],
             'time': time.time() - start,
         }
-    else:
-        tab = {
-            't_est': tau_,
-            'mse0': mse[0],
-            'mse1': mse[1],
-            'bias0': bias[0],
-            'bias1': bias[1],
-            'variance': var_tau,
-            'data_name': data.name,
-            'b': data.b,
-            'method_estimator': param_method['name_estimator'],
-            'method_base_model': param_method['name_base_model'],
-            'method_metric': param_method['name_metric'],
-            'time': time.time() - start,
-        }
+
     return tab, list(tab.keys())
 
 
@@ -260,7 +275,7 @@ class ImageData:
 
     def __init__(self, seed, param_data):
         super(ImageData, self).__init__()
-        self.name = param_data['name']
+        self.name = param_data['data_name']
         batch_size = param_data['batch_size']
         features = {'image/encoded': tf.io.FixedLenFeature([], dtype=tf.string),
                     'image/id': tf.io.FixedLenFeature([], dtype=tf.string),
@@ -271,7 +286,7 @@ class ImageData:
                     }
 
         # path = param_data['data_path']
-        filenames = tf.io.gfile.glob(param_data['path_tfrecords'] +'/'+ param_data['train_suffix'] + '*.tfrec')
+        filenames = tf.io.gfile.glob(param_data['data_path'] +'/'+ param_data['train_suffix'] + '*.tfrec')
         # tf_record_ds = tf.data.TFRecordDataset(filenames)
         print('filenames:', filenames)
         dataset = tf.data.TFRecordDataset(filenames)
@@ -300,6 +315,8 @@ class ImageData:
         self.dataset_control = _get_dataset(ds_control, batch_size=batch_size)
         self.dataset_all = _get_dataset(ds_all, batch_size=batch_size)
         self.dataset_all_ps = _get_dataset_ps(ds_all_ps, batch_size=batch_size)
+        self.is_Image = param_data.get('is_Image',True)
+        self.b = param_data.get('b',1)
 
     def make_plot(self):
         batch = next(iter(self.dataset_treated))

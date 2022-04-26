@@ -92,47 +92,62 @@ def update_param_grid(param_grid, sizes):
     return param_grid
 
 
-def estimator_oaxaca(data,
-                     param_method=None,
-                     param_grid=None):
-    """Estimate treatment effect with oaxaca estimator.
+def estimator(data, param_method=None, param_grid=None,
+              type='oahaca', seed=0):
+    """Estimate treatment effect.
 
   Args:
     data: DataSimulation Class
     param_method: dict with method's parameters
     param_grid: dict with grid search parameters
+    type: oahaca, aipw
   Returns:
     t_estimated: estimated treatment effect using the oaxaca-blinder method
     metric: list, metric on control and treated groups
     bias: list, bias on control and treated group
     var: float, estimator variance.
+
   """
+    # Fix numpy seed for reproducibility
+    np.random.seed(seed)
+
     # Defining basic parameters.
     if param_method is None:
         param_method = default_param_method()
 
-    if param_method.get('image', False):
+    if data.is_Image:
+        print('param_method', param_method)
         # Fitting two models, one per treatment value.
         pred_control, mse_control, e_control, treated, y0_c = fit_base_image_models(
             data.dataset_control,
             param_method['base_model'],
             data.dataset_all,
-            quick=False)
+            param_method)
         pred_treated, mse_treated, e_treated, treated, y1_c = fit_base_image_models(
             data.dataset_treated,
             param_method['base_model'],
             data.dataset_all,
-            quick=False)
-        # Fill-in unobserved // counterfactual.
-        y0_c[treated] = pred_control[treated]
-        y1_c[~treated] = pred_treated[~treated]
+            param_method)
 
-        # Variance.
-        n0 = len(treated) - treated.sum()
-        n1 = treated.sum()
-        var = mse_control / n0 + mse_treated / n1
+        if type == 'oahaca':
+            # Fill-in unobserved // counterfactual.
+            y0_c[treated] = pred_control[treated]
+            y1_c[~treated] = pred_treated[~treated]
+
+            # Variance.
+            n0 = len(treated) - treated.sum()
+            n1 = treated.sum()
+            # Variance and treatment effect estimation
+            var = mse_control / n0 + mse_treated / n1
+            tau_estimated = (y1_c - y0_c).mean()
+
+        else:
+            x = data.dataset_all_ps
+            tau_estimated, var = _calculate_propensity_score(param_method, x, data, pred_treated, pred_control,
+                                                             t=treated, y0=y0_c, y1=y1_c)
     else:
         # Subset treatment and control group.
+        # data.split()
         y0, x0 = data.outcome_control, data.covariates_control
         y1, x1 = data.outcome_treated, data.covariates_treated
 
@@ -144,72 +159,30 @@ def estimator_oaxaca(data,
             x1, y1, param_method['base_model'], data.covariates,
             param_method['metric'], param_grid)
 
-        # Fill-in unobserved // counterfactual.
-        treated = data.treatment == 1
-        y0_c = data.outcome.copy()
-        y1_c = data.outcome.copy()
-        y0_c[treated] = pred_control[treated]
-        y1_c[~treated] = pred_treated[~treated]
+        if type == 'oahaca':
+            # Fill-in unobserved // counterfactual.
+            treated = data.treatment == 1
+            y0_c = data.outcome.copy()
+            y1_c = data.outcome.copy()
+            y0_c[treated] = pred_control[treated]
+            y1_c[~treated] = pred_treated[~treated]
+            # Variance and treatment effect estimation
+            var = mse_control / len(y0) + mse_treated / len(y1)
+            tau_estimated = (y1_c - y0_c).mean()
+        else:
+            x = data.covariates
+            tau_estimated, var = _calculate_propensity_score(param_method, x, data, pred_treated, pred_control,
+                                                             treated, y0, y1)
 
-        # Variance.
-        var = mse_control / len(y0) + mse_treated / len(y1)
-
-    # Estimate treatment effect.
-    t_estimated = (y1_c - y0_c).mean()
-
-    # Bias.
     bias = [e_control, e_treated]
 
     # Metrics.
     metric = [mse_control, mse_treated]
 
-    return t_estimated, metric, bias, var
+    return tau_estimated, metric, bias, var
 
 
-def estimator_aipw(data, param_method=None, param_grid=None):
-    """Estimate treatment effect with aipw estimator.
-
-  Args:
-    data: DataSimulation Class
-    param_method: dict with method's parameters
-    param_grid: dict with grid search parameters
-  Returns:
-    t_estimated: estimated treatment effect using the aipw method
-    metric: list, metric on control and treated groups
-    bias: list, bias on control and treated group
-    var: float, estimator variance.
-  """
-    if param_method is None:
-        param_method = default_param_method()
-
-    if param_method.get('image', False):
-        # Fitting two models, one per treatment value.
-        pred_control, mse_control, e_control, t, y0 = fit_base_image_models(
-            data.dataset_control,
-            param_method['base_model'],
-            data.dataset_all,
-            quick=False)
-        pred_treated, mse_treated, e_treated, t, y1 = fit_base_image_models(
-            data.dataset_treated,
-            param_method['base_model'],
-            data.dataset_all,
-            quick=False)
-        x = data.dataset_all_ps
-    else:
-        # Subset treatment group.
-        data.split()
-        y0, x0 = data.outcome_control, data.covariates_control
-        y1, x1 = data.outcome_treated, data.covariates_treated
-
-        # Fitting two models, one per treatment value.
-        pred_control, mse_control, e_control = fit_model(
-            x0, y0, param_method['base_model'], data.covariates,
-            param_method['metric'], param_grid)
-        pred_treated, mse_treated, e_treated = fit_model(
-            x1, y1, param_method['base_model'], data.covariates,
-            param_method['metric'], param_grid)
-        x = data.covariates
-
+def _calculate_propensity_score(param_method, x, data, pred_treated, pred_control, t, y0, y1):
     # Propensity score using a logistic regression.
     prop_score = param_method['prop_score']
     prop_score.fit(x)
@@ -223,37 +196,34 @@ def estimator_aipw(data, param_method=None, param_grid=None):
     except AttributeError:
         z = t * 1
         y = y0
-
     sample_size = len(y)
 
     residual_treated = (z * (y - pred_treated))
     residual_treated = (residual_treated / e[:, 1].ravel())
+
     residual_control = ((1 - z) * (y - pred_control))
     residual_control = (residual_control / e[:, 0].ravel())
 
     residual_dif = (residual_treated - residual_control)
-    t_estimated = np.mean(np.add(pred_dif, residual_dif))
+    tau_estimated = np.mean(np.add(pred_dif, residual_dif))
 
     # Variance.
     var = np.add(pred_dif, residual_dif)
-    var = np.subtract(var, t_estimated)
+    var = np.subtract(var, tau_estimated)
     var = var ** 2
     var = var.sum() / (sample_size - 1)
     var = var / sample_size
 
-    # Bias.
-    bias = [e_control, e_treated]
-
-    return t_estimated, [mse_control, mse_treated], bias, var
+    return tau_estimated, var
 
 
-def _prediction_image_models(data, model, quick=False):
+def _prediction_image_models(data, model):  # quick=False
     """Predicts the outcome on the full data.
 
   Args:
     data: tf.data.Dataset.
     model: fitted model.
-    quick: predict in a subset of data.
+    #quick: predict in a subset of data.
   Returns:
     arrays with predicted outcome, observed outcome, and treat. assignment.
   """
@@ -264,8 +234,8 @@ def _prediction_image_models(data, model, quick=False):
         y_pred.append(model.predict_on_batch(batch_x))
         y_sim.append(batch_y.numpy())
         t.append(batch_t.numpy())
-        if quick and i > 2000:
-            break
+        # if quick and i > 2000:
+        #    break
 
     y_pred_flat = np.concatenate(y_pred).ravel()
     y_sim_flat = np.concatenate(y_sim).ravel()
@@ -274,7 +244,7 @@ def _prediction_image_models(data, model, quick=False):
     return np.array(y_pred_flat), np.array(y_sim_flat), np.array(t_flat)
 
 
-def fit_base_image_models(data, model, dataset_all, quick=False):
+def fit_base_image_models(data, model, dataset_all, model_settings):
     """Predicts the outcome on the full data.
 
   Args:
@@ -289,9 +259,9 @@ def fit_base_image_models(data, model, dataset_all, quick=False):
     t: treatment assigment on data_all
     y_sim: observed outcome on data_all
   """
-    epochs = 40
-    steps = 60
-    quick = True
+    epochs = model_settings.get('epochs', 10)
+    steps = model_settings.get('steps', 10)
+    # quick = True
     history = model.fit(data, steps_per_epoch=steps, epochs=epochs, verbose=2)
     try:
         mse = history.history['mean_squared_error'][-1]
@@ -299,5 +269,5 @@ def fit_base_image_models(data, model, dataset_all, quick=False):
         mse = history.history['mse'][-1]
 
     bias = history.history['mae'][-1]
-    y_pred, y_sim, t = _prediction_image_models(dataset_all, model, quick=quick)
+    y_pred, y_sim, t = _prediction_image_models(dataset_all, model)  # quick=quick
     return y_pred, mse, bias, t, y_sim
