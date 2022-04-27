@@ -62,8 +62,8 @@ class NonImageData:
         super(DataSimulation, self).__init__()
         self.seed = seed
         self.param_data = param_data
-        self.name = param_data['data_name']
-        self.is_Image = param_data.get('is_Image',False)
+        self.name = param_data['name']
+        self.is_Image = param_data.get('is_Image', False)
         self.splitted = False
         if self.name == 'IHDP':
             self._load_ihdp()
@@ -190,10 +190,10 @@ class NonImageData:
 
 
 def repeat_experiment(data, param_method):
-    repetitions = param_method.get('repetitions',1)
+    repetitions = param_method.get('repetitions', 1)
     for b in range(repetitions):
         resul, columns = experiments(data=data, seed=b, param_method=param_method)
-        if b==0:
+        if b == 0:
             tab = pd.DataFrame(columns=columns)
             tab = tab.append(resul, ignore_index=True)
         else:
@@ -211,7 +211,7 @@ def experiments(data, seed, param_method):
     Dictionary with simulation results.
     col names
   """
-    #del seed
+    # del seed
     start = time.time()
     estimator = param_method['estimator']
     param_grid = param_method['param_grid']
@@ -226,7 +226,7 @@ def experiments(data, seed, param_method):
             'bias0': bias[0],
             'bias1': bias[1],
             'variance': var_tau,
-            'data_name': data.name,
+            'name': data.name,
             'seed': seed,
             'method_estimator': param_method['name_estimator'],
             'method_base_model': param_method['name_base_model'],
@@ -243,7 +243,7 @@ def experiments(data, seed, param_method):
             'bias0': bias[0],
             'bias1': bias[1],
             'variance': var_tau,
-            'data_name': data.name,
+            'name': data.name,
             'data_n': data.sample_size,
             'data_num_covariates': data.num_covariates,
             'data_noise': data.noise,
@@ -265,7 +265,7 @@ class ImageData:
     The path to the folder determines the type of outcome (clinical or simulated).
     param_data={'name':'kagle_retinal',
               'path_tfrecords':str,
-              'train_suffix':str,
+              'prefix_train':str,
               'image_size':[s,s],
               'batch_size':int
      }
@@ -275,7 +275,7 @@ class ImageData:
 
     def __init__(self, seed, param_data):
         super(ImageData, self).__init__()
-        self.name = param_data['data_name']
+        self.name = param_data['name']
         batch_size = param_data['batch_size']
         features = {'image/encoded': tf.io.FixedLenFeature([], dtype=tf.string),
                     'image/id': tf.io.FixedLenFeature([], dtype=tf.string),
@@ -286,9 +286,8 @@ class ImageData:
                     }
 
         # path = param_data['data_path']
-        filenames = tf.io.gfile.glob(param_data['data_path'] +'/'+ param_data['train_suffix'] + '*.tfrec')
-        # tf_record_ds = tf.data.TFRecordDataset(filenames)
-        print('filenames:', filenames)
+        filenames = tf.io.gfile.glob(param_data['path_tfrecords'] + param_data['prefix_train'] + '*.tfrec')
+        assert len(filenames) > 0, 'No files found! Check path and prefix'
         dataset = tf.data.TFRecordDataset(filenames)
         dataset = dataset.map(_get_parse_example_fn(features), num_parallel_calls=tf.data.AUTOTUNE)
         dataset = dataset.map(_decode_img, num_parallel_calls=tf.data.AUTOTUNE)
@@ -315,8 +314,8 @@ class ImageData:
         self.dataset_control = _get_dataset(ds_control, batch_size=batch_size)
         self.dataset_all = _get_dataset(ds_all, batch_size=batch_size)
         self.dataset_all_ps = _get_dataset_ps(ds_all_ps, batch_size=batch_size)
-        self.is_Image = param_data.get('is_Image',True)
-        self.b = param_data.get('b',1)
+        self.is_Image = param_data.get('is_Image', True)
+        self.b = param_data.get('b', 1)
 
     def make_plot(self):
         batch = next(iter(self.dataset_treated))

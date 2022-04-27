@@ -1,10 +1,19 @@
+""" Working with diabetic-retinopathy-detection data from Kaggle.
+This file runs the feature extractor model.
+
+Reference:
+Google Health worked retinal images from the UK Biobank. While our feature extractor uses
+different labels, both images properties are very similar.
+github.com/Google-Health/genomics-research/blob/main/ml-based-vcdr/learning/model_utils.py
+"""
+
+import concurrent.futures
 import itertools
-import numpy as np
 import math
+import numpy as np
 import os
 import pandas as pd
 import tensorflow as tf
-import concurrent.futures
 
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.io import gfile
@@ -13,18 +22,11 @@ from tensorflow.io import gfile
 import kaggle_data as kd
 
 
-# adapted from https://github.com/Google-Health/genomics-research/blob/bd0d0d0d581d29584a1d203b8f7a44385d0749cb/ml-based-vcdr/learning/model_utils.py#L99
 def compile_model(model_config):
     """Builds a graph and compiles a tf.keras.Model based on the configuration."""
 
     model = _inceptionv3(model_config)
-
-    # model.compile(
-    #    optimizer=model_config.get('optimizer', 'adam'),
-    #    loss='sparse_categorical_crossentropy',
-    #    metrics=['accuracy']
-    # )
-    losses = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)  # add []?
+    losses = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
     metrics = [tf.keras.metrics.CategoricalAccuracy(name='cat_accuracy')]
     optimizer = _build_optimizer(model_config)
     model.compile(
@@ -40,13 +42,13 @@ def compile_model(model_config):
 
 def _inceptionv3(model_config, image_shape=[256, 256]):
     """Returns an InceptionV3 architecture as defined by the configuration.
-  See https://tensorflow.org/api_docs/python/tf/keras/applications/InceptionV3.
-  Args:
+    See https://tensorflow.org/api_docs/python/tf/keras/applications/InceptionV3.
+    Args:
     model_config: A dict containing model hyperparamters.
     image_shape
-  Returns:
+    Returns:
     An InceptionV3-based model.
-  """
+    """
 
     backbone = tf.keras.applications.InceptionV3(
         include_top=False,
@@ -55,7 +57,6 @@ def _inceptionv3(model_config, image_shape=[256, 256]):
     )
     l2 = model_config.get('l2', None)
     kernel_regularizer = tf.keras.regularizers.L2(l2)
-    # backbone_drop_rate = model_config.get('backbone_drop_rate', 0.0)
     model = tf.keras.Sequential([
         backbone,
         tf.keras.layers.Dense(model_config.get('hidden_size', 1024),
@@ -70,10 +71,15 @@ def _inceptionv3(model_config, image_shape=[256, 256]):
     return model
 
 
-def _build_optimizer(opt_config):
-    initial_learning_rate = opt_config.get('learning_rate', 0.001)
-    steps_per_epoch = opt_config.get('steps_per_epoch', 10)
-    schedule_config = opt_config.get('schedule', {})
+def _build_optimizer(model_config):
+    """Builds optimizer based on config file.
+
+    :param model_config: dict with parameters
+    :return: tf.keras.optimizers obj
+    """
+    initial_learning_rate = model_config.get('learning_rate', 0.001)
+    steps_per_epoch = model_config.get('steps_per_epoch', 10)
+    schedule_config = model_config.get('schedule', {})
     schedule_type = schedule_config.get('schedule', None)
 
     if schedule_type == 'exponential':
@@ -89,48 +95,64 @@ def _build_optimizer(opt_config):
     else:
         raise ValueError(f'Unknown scheduler name: {schedule_type}')
 
-    opt_type = opt_config.get('optimizer', None)
+    opt_type = model_config.get('optimizer', None)
     if opt_type == 'adam':
         opt = tf.keras.optimizers.Adam(
             learning_rate=learning_rate,
-            beta_1=opt_config.get('beta_1', 0.9),
-            beta_2=opt_config.get('beta_2', 0.999),
-            epsilon=opt_config.get('epsilon', 1e-07),
-            amsgrad=opt_config.get('amsgrad', False))
-        # start_step = int(steps_per_epoch * 1)
+            beta_1=model_config.get('beta_1', 0.9),
+            beta_2=model_config.get('beta_2', 0.999),
+            epsilon=model_config.get('epsilon', 1e-07),
+            amsgrad=model_config.get('amsgrad', False))
         return opt
-
-    raise ValueError(f'Unknown optimizer name: {opt_type}')
+    else:
+        raise ValueError(f'Unknown optimizer name: {opt_type}')
 
 
 def extract_hx(model_config):
-    dataset_extract, dataset_train = kd.build_datasets_feature_extractor(model_config,
-                                                                         train_suffix='extract',
-                                                                         val_suffix='train',
+    """ Function that extracts the features;
+
+    :param model_config: dictionary with model settings. Required keys: {'epochs', 'steps_per_epoch', 'batch_size',
+     'path_tfrecords', 'path_features','weights', 'hidden_size', 'num_classes', 'learning_rate', 'optimizer' }
+
+    :return: model, and saves a .csv file with extracted features
+    """
+
+    #  1. Build tfrecord datasets - important to use type='TrainFeatureExtractor'
+    dataset_train, dataset_extract = kd.build_datasets_feature_extractor(model_config,
+                                                                         prefix_extract='extract',
+                                                                         prefix_train='train',
                                                                          type='TrainFeatureExtractor')
+    #  2. Creates model
     model = compile_model(model_config)
     model_config['epochs'] = model_config.get('epochs', 10)
     model_config['steps_per_epoch'] = model_config.get('steps_per_epoch', 2)
 
+    #  3. Fits model on train* images, using dataset_extract only as validation
     model.fit(
-        dataset_extract,  # portion of the dataset used to train feature extractor only
-        validation_data=dataset_train,  # portion of the dataset used as covariates
+        dataset_train,  # portion of the dataset used to train feature extractor only
+        validation_data=dataset_extract,  # portion of the dataset used as covariates
         epochs=model_config['epochs'],
         initial_epoch=0,
         steps_per_epoch=model_config['steps_per_epoch'],
     )
+
+    #  4. Creates a model with only the last layer of the image based model
     extract = tf.keras.Model(model.inputs, model.layers[-2].output)
-    _, dataset_train = kd.build_datasets_feature_extractor(model_config,
-                                                           train_suffix='extract',
-                                                           val_suffix='train',
-                                                           type='ExtractFeatures')
-    features = _extraction(dataset_train, model_config['path_output'], extract)
+
+    #  5. Rebuild the dataset using type 'ExtractFeatures' - it will return batch with IDs (used on join)
+    _, dataset_extract = kd.build_datasets_feature_extractor(model_config,
+                                                             prefix_extract='extract',
+                                                             prefix_train='train',
+                                                             type='ExtractFeatures')
+
+    #  6. Extract features, and save them as .csv file on path_features.
+    features = _extraction(dataset_extract, model_config['path_features'], extract)
 
     return model
 
 
 def _extraction(data, path, model):
-    """Make predictions and extract last layer.
+    """Extract features using the model (last layer of an image model - before prediction of classes) on the data.
 
   Args:
     data: built dataset.
@@ -156,7 +178,7 @@ def _extraction(data, path, model):
 
     features = np.array(features)
     s = features.shape
-    print('shapes ', s)
+    # print('shapes ', s)
     features = features.reshape(s[0] * s[1], s[2])
 
     columns = [f'f{i}' for i in range(features.shape[1])]
@@ -171,10 +193,9 @@ def _extraction(data, path, model):
     return features
 
 
-def generate_simulations(path_output,
+def generate_simulations(path_root,
                          output_name='simulations',
                          features=pd.DataFrame(),
-                         path_features='',
                          features_name='features.csv',
                          b=30,
                          knob_o=True,  # overlap
@@ -186,8 +207,8 @@ def generate_simulations(path_output,
                          ):
     """Generate the p(x) and mu(x,y) from h(x).
 
-  Args:
-    path_output: path to save output file
+    Args:
+    path_root: path to save output file (same where features are located)
     output_name: string with filename
     features: pd.DataFrame istead of reading (time consuming)
     path_features: path for the features_name.csv file.
@@ -199,7 +220,7 @@ def generate_simulations(path_output,
     beta_range: list with values to be explored if knob_o True (defoult values also provided)
     alpha_range: list with values to be explored if knob_h True (defoult values also provided)
     gamma_range: list with values to be explored if knob_s True (defoult values also provided)
-  """
+    """
 
     def _generation_weights(n_cols=2048, alpha=2):
         """Generate initial weights.
@@ -239,6 +260,13 @@ def generate_simulations(path_output,
         return t
 
     def _mu_x_function(features, eta1, eta0, gamma=1):
+        """ Calcualte the outcome.
+        :param features: input features, extracted on phase 1 of the framework;
+        :param eta0: weights if untreated
+        :param eta1: weights if treated
+        :param gamma: knob_s values (treat effect)
+        :return:
+        """
         mu1 = np.array(np.matmul(features, eta1))
         mu0 = np.array(np.matmul(features, eta0))
         full = np.array(np.concatenate([mu1, mu0]))
@@ -296,7 +324,7 @@ def generate_simulations(path_output,
         gamma = [0.5]
 
     if features.empty:
-        features = pd.read_csv(os.path.join(path_features, features_name))
+        features = pd.read_csv(os.path.join(path_root, features_name))
 
     output = pd.DataFrame()
     output['images_id'] = features['images_id']
@@ -316,9 +344,8 @@ def generate_simulations(path_output,
             output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-mu0'] = mu0
             output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-y'] = y
 
-    with gfile.GFile(os.path.join(path_output, output_name + '.csv'), 'w') as out:
+    with gfile.GFile(os.path.join(path_root, output_name + '.csv'), 'w') as out:
         out.write(output.to_csv(index=False))
-
 
     return output
 
@@ -358,13 +385,7 @@ def join_tfrecord_csv(path_simulations,
             _print_status('SKIPPED (`output_path` already exists)', tfrecord_path,
                           output_path)
             return
-        # try:
-        # Dict[id] = image
         dict_id_to_encoded_images = _map_id_to_encoded_images(path_input)
-        # print(' ',dict_id_to_encoded_images.keys())
-        # print('_add_labels_to_tfrecords',label_records.keys())
-
-        # list[labels]
         dict_label_tfrecords = _build_label_tensor_dicts(dict_id_to_encoded_images,
                                                          label_records)
         tf_examples = _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords)
@@ -432,7 +453,6 @@ def join_tfrecord_csv(path_simulations,
             if first_name not in label_records.keys():
                 continue
             dict_labels[first_name] = label_records[first_name]
-            print(first_name, ' done')
         return dict_labels
 
     def _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords):
@@ -441,8 +461,10 @@ def join_tfrecord_csv(path_simulations,
 
         for image_id in dict_label_tfrecords.keys():
             encoded_image = dict_id_to_encoded_images[image_id].numpy()
-            simulations = dict_label_tfrecords[image_id]
-            examples.append(_build_tf_record_features(encoded_image, image_id.encode('utf-8'), simulations))
+            # simulations = dict_label_tfrecords[image_id]
+            examples.append(_build_tf_record_features(encoded_image,
+                                                      image_id.encode('utf-8'),
+                                                      dict_label_tfrecords[image_id]))
         return examples
 
     def _build_tf_record_features(encoded_image, image_id, simulations):
@@ -484,7 +506,6 @@ def join_tfrecord_csv(path_simulations,
         record['images_id']: record
         for record in simulations.to_dict('records')
     }]
-    # print('labels ', label_records[0].keys())
     tfrecord_input_filenames, tfrecord_output_filenames = _make_filepaths(path_input, path_output, input_prefix,
                                                                           output_prefix)
 
@@ -504,42 +525,55 @@ def join_tfrecord_csv(path_simulations,
     print('DONE with JOIN features')
 
 
-def organizing_simulations(path_output):
+def organizing_simulations(path_features):
+    """ Organize all simulations in a single file.
+
+    One might choose to create several simulation files (one file per knob, or a knob with different parameters).
+    This function will combine all simulation files in the same folder into a single simulation file and also
+    creates a true_tau.csv file, which contains the true value per simulation index.
+
+    :param path_features:
+    :return: sim_id (simulation unique id)
+    """
+
+    #  1.Find all files in folder starting with simulations_.
     simulations = []
-    for item in os.listdir(path_output):
+    for item in os.listdir(path_features):
         if item.startswith('simulations_'):
             simulations.append(item)
 
+    #  2. Join all files simulations_*.
     print('Joining simulations:')
     join_all_simulations = pd.DataFrame()
     for file in simulations:
-        sim = pd.read_csv(os.path.join(path_output, file))
+        sim = pd.read_csv(os.path.join(path_features, file))
         if join_all_simulations.empty:
             join_all_simulations = sim
         else:
-            print(join_all_simulations.shape)
+            #print(join_all_simulations.shape)
             join_all_simulations = pd.merge(join_all_simulations, sim, how='outer', on='images_id')
-    print(join_all_simulations.shape)
+    #print(join_all_simulations.shape)
 
-    with gfile.GFile(os.path.join(path_output, 'joined_simulations' + '.csv'), 'w') as out:
+    #  3. Write joined simulations.
+    with gfile.GFile(os.path.join(path_features, 'joined_simulations' + '.csv'), 'w') as out:
         out.write(join_all_simulations.to_csv(index=False))
 
-    run_index = list(join_all_simulations.columns)
-    run_index.remove('images_id')
-    run_index = [item.split('-')[0] for item in run_index]
-    run_index = pd.unique(run_index)
+    #  4. Getting unique simulation id (sim_id).
+    sim_id = list(join_all_simulations.columns)
+    sim_id.remove('images_id')
+    sim_id = [item.split('-')[0] for item in sim_id]
+    sim_id = pd.unique(sim_id)
 
-    # Creating file with true tau
+    # 5. Calculating true tau and writting into a csv file.
     tau = pd.DataFrame(
-        columns={'run_index', 'tau', 'setting_id', 'knob', 'setting', 'repetition', 'alpha', 'beta', 'gamma'})
-
-    for item in run_index:
+        columns={'sim_id', 'tau', 'setting_id', 'knob', 'setting', 'repetition', 'alpha', 'beta', 'gamma'})
+    for item in sim_id:
         mu1 = join_all_simulations[[item + '-mu1']].values
         mu0 = join_all_simulations[[item + '-mu0']].values
         ite = mu1 - mu0
         items = item.split('_')
 
-        tau_ = {'run_index': item,
+        tau_ = {'sim_id': item,
                 'tau': np.mean(ite),
                 'knob': items[1][0:2],
                 'setting': items[1][-1],
@@ -550,7 +584,7 @@ def organizing_simulations(path_output):
                 'gamma': items[5]
                 }
         tau = tau.append(tau_, ignore_index=True)
-    with gfile.GFile(os.path.join(path_output, 'true_tau' + '.csv'), 'w') as out:
+    with gfile.GFile(os.path.join(path_features, 'true_tau' + '.csv'), 'w') as out:
         out.write(tau.to_csv(index=False))
 
-    return run_index
+    return sim_id

@@ -61,7 +61,7 @@ class MakeParameters:
         #self.parameters_data = _read_data_configs(self.config_data)
         self.config_methods = _read_method_configs(
             _create_configs(configs_methods),
-            self.config_data[0]['data_name'],
+            self.config_data[0]['name'],
             self.config_data[0].get('setting', None),
             self.config_data[0].get('data_low_dimension', False),
         )
