@@ -1,69 +1,77 @@
 # Images as Covariates in Estimation of Treatment Effects Analysis (ICETEA)
 
-In this project, we investigated the use of ML models for estimating treatment
-effects. Benchmarking causal inference methods is challenging, and after our
-initial analysis, we identified a need for a new benchmark with a reasonable
-causal story and a clear need for ML models. Thus, we proposed a new
-semi-synthetic benchmark based on images and performed experiments using retinal
+Last Update: 
+
+Semi-synthetic benchmark based on images. The observed images are used as covariates (X), 
+the treatment assigment (T) is simulated, and the continuous outcome (Y) can be either 
+simulated or modified from a observed covariate. For mode details on the 
+creation of the dataset, please check ADD LINK TO PAPER. 
+
+Ideal use cases: 
+* Evaluation of methods that need to perform confounder adjustment. 
+* Evaluation of causal inference methods with ML components;
+
+We provide a use case of our framework with retinal
 fundus images. Recent evidence suggests retinal fundus images are
 correlated with general vascular conditions, which affects several medical
 conditions. Therefore, it is reasonable to consider include retinal
-images to make a confounder adjustment to study causal effects.
+images to make a confounder adjustment to study causal effects. 
+Kaggle hosted a [Diabetic Retinopathy Detection competition](https://www.kaggle.com/c/diabetic-retinopathy-detection), and its datasets 
+contain ~35k retinal fundus images [[1]](###References). 
+
+
+The framework can be divided into two parts: 
+1. Feature Extraction: We split the images available in two groups: X (default 70%) 
+and W (defeault 100-70%). The images in W are used to train an image model that 
+predicts an outcome associated with the original images. After training the model,
+we remove the last layer (responsible for predicting the original outcome), and 
+define this new model H().
+
+2. Data Simulation: We extract features, defined as h = H(X). Note that X was never seen by the
+image model H(). We use h to simulate the treatment assignment T, and the oucome Y 
+(see the original publication for details on how to modify a observed clinical variable).
+
+Causal inference analysis receive as input X (covariates/images), T(binary treat.)
+and Y (continuous outcome). 
 
 ## Summary
 
 This repo contains:
 
--   A `README.md` that contains the current status, list of existing files, and
-    example on how to run the code.
--   file/directory structure:
+- `README.md`: This file, repository description and usage.
 
-    -   `train.py` : Code for training/evaluating the model.
-    -   `utils.py' : Code for data simulation, and to run the experiments.
-    -   `estimators.py': Implementation of the estimators.
-    -   `config.py`: Organize the parameters.
-    -   `beam_utils.py': Functions to run beam pipeline.
-    -   `ukb.py`: Functions to pre process the UK Biobank Retinal Image data.
-    -   `ukb_utils.py`: Auxiliary methods of the ukb.py
+Files directly related to the framework:
+- [`icetea_feature_extraction.py`](icetea_feature_extraction.py): Feature Extraction (example using Kaggle Retinal Images).
+It train H() model, and extract features h=H(X).
+- [`icetea_data_simulation.py`](icetea_data_simulation.py): Data Generation. Join existing tfrecords to new simulated data (T and Y).
+It also contain knobs to better control simulated data.
+- [`data_kaggle.py`](data_kaggle.py): Specific for the Kaggle dataset adopted to illustrate
+our framework. Contain functions to trasnform the png images into tfrecords, and to load tf.data.Dataset obj.
 
--   Datasets:
+Causal Inference experiments to explore the framework:
+- [`estimators.py`](estimators.py): Treatment Effect Estimators (oahaca and aipw). There are
+three base models available: resnet50, inceptionV3, linear regression;
+- [`utils.py`](utils.py) : Creates ImageData obj used by the estimators, experiments loop based on parameters;
+- [`config.py`](config.py): Based on parameters, it creates objectts used by the experiments.
 
-    -   IHDP: We adopt the same datasets from CEVAE's paper.
-        [Source url](https://github.com/AMLab-Amsterdam/CEVAE/tree/master/datasets/IHDP/csv)
-    -   ACIC: Download datasets
-        [link](https://sites.google.com/corp/view/acic2019datachallenge/home)
+Files related to UKB: (REMOVE?)
+- `beam_utils.py`: remove?
+- `ukb.py`: remove?
+- `ukb_utils.py`: remove?
+- `train.py` remove?
+
+### Usage:
+
+TODO ADD COLAB 
 
 
-Note: The ukb.py has dependencies on ukb_model_utils.py. This file is available
-at
-[Google-Health/genomics-research](https://github.com/Google-Health/genomics-research/tree/main/ml-based-vcdr)
-github repo.
+###References
+[1] Cuadros J, Bresnick G. EyePACS: An Adaptable Telemedicine System for Diabetic Retinopathy Screening. Journal of diabetes science and technology (Online). 2009;3(3):509-516.
 
-Known caveats:
 
--   When using the AIPW, the logistic regression can sometimes (~10% of runs)
-    cause issues if estimates the probabilities as 1 or 0, resulting in very
-    poor treatment effect estimates. In this case, the best current solution is
-    to run that specific repetition again. A different random initialization
-    usually sorts it out.
--   When working with observed clinical features as the outcome, you might need
-    to update the range from the tau simulation in simulating_y_from_clinical()
-    at ukb.py.
+###TODOS: 
+- Should I remove stuff related to IHDP and ACIC from previous experiments?
+- Should I remove the files related to ukb.py?
 
-Important Args:
-
--   `--setting`:
-    -   quick: b=1, run all methods, two small samples and two small covariates;
-    -   samples: explore several sample sizes with fix covariates;
-    -   covariates: explore several covariates sizes with fixed sample size;
-    -   synthetic: semi-synthetic datasets, sample size and covariates are
-        fixed;
-    -   ukb: uk biobank images dataset.
--   `--overwrite`:
-    -   If True, the files on path_output will be overwritten.
 
 This is not an officially supported Google product.
-
-
-### TODOS: 
-- Should I remove stuff related to IHDP and ACIC from previous experiments?
