@@ -1,6 +1,6 @@
 # Images as Covariates in Estimation of Treatment Effects Analysis (ICETEA)
 
-Last Update: 
+Last Update: 2022-05-02
 
 Semi-synthetic benchmark based on images. The observed images are used as covariates (X), 
 the treatment assigment (T) is simulated, and the continuous outcome (Y) can be either 
@@ -54,15 +54,17 @@ three base models available: resnet50, inceptionV3, linear regression;
 - [`utils.py`](utils.py) : Creates ImageData obj used by the estimators, experiments loop based on parameters;
 - [`config.py`](config.py): Based on parameters, it creates objectts used by the experiments.
 
-Files related to UKB: (REMOVE?)
-- `beam_utils.py`: remove?
-- `ukb.py`: remove?
-- `ukb_utils.py`: remove?
-- `train.py` remove?
+Old files: 
+- [`beam_utils.py`](beam_utils.py) and [`train.py`](train.py) were previously used to 
+run the experiments using a beam pipeline. I kept the code, but it is not currently 
+supported. 
 
 ### Usage:
+- [icetea_feature_extraction_data_simulation.ipynb](icetea_feature_extraction_data_simulation.ipynb): 
+framework implementation - from loading png gfiles, to extracting features and simulating the data; 
+- icetea_causal_inference.ipynb: load the tfrecords with the simulated data, and estimate treatment effects
 
-TODO ADD COLAB 
+
 
 
 ###References
