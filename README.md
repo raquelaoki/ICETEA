@@ -62,9 +62,7 @@ supported.
 ### Usage:
 - [icetea_feature_extraction_data_simulation.ipynb](icetea_feature_extraction_data_simulation.ipynb): 
 framework implementation - from loading png gfiles, to extracting features and simulating the data; 
-- icetea_causal_inference.ipynb: load the tfrecords with the simulated data, and estimate treatment effects
-
-
+- [icetea_causal_inference.ipynb](icetea_causal_inference.ipynb): load the tfrecords with the simulated data, and estimate treatment effects
 
 
 ###References
