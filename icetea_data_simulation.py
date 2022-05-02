@@ -154,19 +154,26 @@ def generate_simulations(path_root,
     output['images_id'] = features['images_id']
     features = features.drop(['images_id'], axis=1)
     for i in range(b):
+        output_ = pd.DataFrame()
         for j, (alpha_, beta_, gamma_) in enumerate(list(itertools.product(alpha, beta, gamma))):
             np.random.seed(i * 1000 + j)
             phi, eta1, eta0 = _generation_weights(features.shape[1], alpha_)
             pi = _pi_x_function(features.values, phi, beta_)
             mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_)
-            y = mu1
-            y[pi == 0] = mu0[pi == 0]
-
+            #y = mu1
+            y = [mu0[i][0] if p == 0 else mu1[i][0] for i, p in enumerate(pi)]
+            #y[pi == 0] = mu0[pi == 0]
+            #print('checking',pi[0:10]==0, pi[0:10])
             knob = str(alpha_) + '_' + str(beta_) + '_' + str(gamma_)
-            output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-pi'] = pi
-            output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-mu1'] = mu1
-            output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-mu0'] = mu0
-            output['sim' + name_id + str(j) + '_b' + str(i) + '_' + knob + '-y'] = y
+            prefix = 'sim' + name_id + str(j) + '_b' + str(i) + '_' + knob
+
+            output_[prefix + '-pi'] = pi
+            output_[prefix + '-mu1'] = mu1
+            output_[prefix + '-mu0'] = mu0
+            output_[prefix + '-y'] = y
+        output = pd.concat([output, output_], axis=1)
+
+
 
     with gfile.GFile(os.path.join(path_root, output_name + '.csv'), 'w') as out:
         out.write(output.to_csv(index=False))
@@ -199,6 +206,7 @@ def join_tfrecord_csv(path_simulations,
                 fileout = filename.replace(input_prefix, output_prefix)
                 tfrecord_output_filenames.append(os.path.join(path_output, fileout))
 
+        #print('_make_filepaths',tfrecord_output_filenames)
         return tfrecord_input_filenames, tfrecord_output_filenames
 
     def _add_labels_to_tfrecords(path_input, path_output, label_records, overwrite=True):
@@ -209,12 +217,17 @@ def join_tfrecord_csv(path_simulations,
             _print_status('SKIPPED (`output_path` already exists)', tfrecord_path,
                           output_path)
             return
-        dict_id_to_encoded_images = _map_id_to_encoded_images(path_input)
-        dict_label_tfrecords = _build_label_tensor_dicts(dict_id_to_encoded_images,
-                                                         label_records)
-        tf_examples = _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords)
-        _write_tf_examples(tf_examples, path_output)
-        _print_status('completed successfully', path_input, path_output)
+        try:
+            dict_id_to_encoded_images = _map_id_to_encoded_images(path_input)
+            dict_label_tfrecords = _build_label_tensor_dicts(dict_id_to_encoded_images,
+                                                             label_records)
+            tf_examples = _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords)
+            _write_tf_examples(tf_examples, path_output)
+            _print_status('completed successfully', path_input, path_output)
+            return None
+        except ValueError:
+            print_status('FAILED', tfrecord_path, output_path)
+            return tfrecord_path
 
     def _map_id_to_encoded_images(path_input):
         """Returns a dictionary of encoded image tensors keyed on image id."""
@@ -230,18 +243,18 @@ def join_tfrecord_csv(path_simulations,
     def _build_features():
         """Returns a feature dictionary used to parse TFRecord examples.
 
-    We assume that the UKB TFRecords are defined using the following schema:
+        We assume that the UKB TFRecords are defined using the following schema:
 
-      1. An encoded image with key `IMAGE_ENCODED_TFR_KEY` that can be decoded
-         using `tf.image.decode_png`.
-      2. A unique identifier for each image with key `IMAGE_ID_TFR_KEY`.
+          1. An encoded image with key `IMAGE_ENCODED_TFR_KEY` that can be decoded
+             using `tf.image.decode_png`.
+          2. A unique identifier for each image with key `IMAGE_ID_TFR_KEY`.
 
-    The `tf.io.parse_single_example` function uses the resulting feature
-    dictionary to parse each TFRecord.
+        The `tf.io.parse_single_example` function uses the resulting feature
+        dictionary to parse each TFRecord.
 
-    Returns:
-      A feature dictionary for parsing TFRecords.
-    """
+        Returns:
+          A feature dictionary for parsing TFRecords.
+        """
         features = {
             'image/encoded': tf.io.FixedLenFeature([], dtype=tf.string),
             'image/id': tf.io.FixedLenFeature([], dtype=tf.string),
@@ -275,8 +288,10 @@ def join_tfrecord_csv(path_simulations,
         dict_labels = {}
         for first_name in dict_id_to_encoded_images:
             if first_name not in label_records.keys():
+                print("MISSING", first_name)
                 continue
             dict_labels[first_name] = label_records[first_name]
+            #print('found',first_name)
         return dict_labels
 
     def _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords):
@@ -323,23 +338,39 @@ def join_tfrecord_csv(path_simulations,
 
     # Loading simulations.
     simulations = pd.read_csv(path_simulations)
+    print('simulations', len(pd.unique(simulations['images_id'])),simulations.shape)
     if path_input == path_output:
         raise ValueError('Input and Output path should be different!')
 
-    label_records = [{
+    label_records = {
         record['images_id']: record
         for record in simulations.to_dict('records')
-    }]
-    tfrecord_input_filenames, tfrecord_output_filenames = _make_filepaths(path_input, path_output, input_prefix,
-                                                                          output_prefix)
+    }
+    tfrecord_input_filenames, tfrecord_output_filenames = _make_filepaths(path_input=path_input,
+                                                                          path_output=path_output,
+                                                                          input_prefix=input_prefix,
+                                                                          output_prefix=output_prefix)
+    print('tfrecord_input_filenames',tfrecord_input_filenames)
 
+    # Generate arguments for converting each shard.
+    #add_labels_to_tfrecords_args1 = []
+    #add_labels_to_tfrecords_args2 = []
+
+    failed_paths_with_none = []
+    for input_path, output_path in zip(tfrecord_input_filenames,
+                                          tfrecord_output_filenames):
+        failed = _add_labels_to_tfrecords(path_input=input_path,
+                                          path_output=output_path,
+                                          label_records=label_records)
+        if failed:
+            failed_paths_with_none.append(failed)
     # Process each shard in parallel, pairing images and labels.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-        failed_paths_with_none = list(
-            executor.map(_add_labels_to_tfrecords,
-                         tfrecord_input_filenames,
-                         tfrecord_output_filenames,
-                         label_records))
+    #with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+    #    failed_paths_with_none = list(
+    #        executor.map(_add_labels_to_tfrecords,
+    #                     add_labels_to_tfrecords_args1,
+    #                     add_labels_to_tfrecords_args2,
+    #                     label_records))
 
     # Print the filepaths of any failed runs for reprocessing.
     failed_paths = [str(path) for path in failed_paths_with_none if path]

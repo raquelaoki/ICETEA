@@ -165,30 +165,33 @@ def _extraction(data, path, model):
         stateful_metrics=None,
         unit_name='step')
 
-    features = []
+    #features = []
     image_id = []
-    featuresnew = pd.DataFrame()
+    features = pd.DataFrame()
 
     for i, (batch_images, batch_labels, batch_id) in enumerate(data):
         batch_predict = model.predict_on_batch(batch_images)
-        features.append(batch_predict)
-        featuresnew = pd.concat([featuresnew,batch_predict], axis=1)
+        #features.append(batch_predict)
+        #print('_extraction',batch_predict.shape,batch_predict[0:3,0:3])
+        features = pd.concat([features,pd.DataFrame(batch_predict)], axis=0)
+        ##print('fetures', features.tail())
         image_id.append(batch_id)
         progbar.add(1)
-        if i > 10:
-            break
+        #if i > 10:
+        #    break
 
-    features = np.array(features)
-    s = features.shape
-    print(
-        '\nshapes pd ', featuresnew.shape
-    )
-    print('\nshapes ', s, s[0].shape)
-    features = features.reshape(s[0] * s[1], s[2])
+    #features = np.array(features)
+    #s = features.shape
+    #print(
+    #    '\nshapes pd ', featuresnew.shape
+    #)
+    #print('\nshapes ', s, s[0].shape)
+    #features = features.reshape(s[0] * s[1], s[2])
 
     columns = [f'f{i}' for i in range(features.shape[1])]
-    features = pd.DataFrame(data=features,
-                            columns=columns)
+    #features = pd.DataFrame(data=features,
+     #                       columns=columns)
+    features.columns = columns
     image_id = np.concatenate(image_id).ravel()
     image_id = [item.decode('utf-8') for item in image_id]
     # print('shape', features.shape)
