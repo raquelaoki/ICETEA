@@ -39,156 +39,6 @@ TensorDict = Dict[str, tf.Tensor]
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-# BATCH_SIZE = 16
-# IMAGE_SIZE = [587, 587]
-
-
-class NonImageData:
-    """Data Simulation.
-
-  Description: Class to organize, reads/simulate the data, and constructs the
-  dataset obj.
-  Check the README file for references about the data generation.
-
-  Attr:
-    seed: int, random seed
-    param_data: dictionary, data parameters
-
-  Returns:
-    Creates DataSimulation obj
-  """
-
-    def __init__(self, seed, param_data):
-        super(DataSimulation, self).__init__()
-        self.seed = seed
-        self.param_data = param_data
-        self.name = param_data['name']
-        self.is_Image = param_data.get('is_Image', False)
-        self.splitted = False
-        if self.name == 'IHDP':
-            self._load_ihdp()
-        elif self.name == 'ACIC':
-            self._load_acic()
-        else:
-            raise NotImplementedError('Dataset not supported:{}'.format(self.name))
-        self._split()
-
-    def _split(self):
-        if not self.splitted:
-            self._treated_samples()
-            self._control_samples()
-            self.splitted = True
-
-    def _treated_samples(self):
-        if not self.splitted:
-            self.outcome_treated = self.outcome[self.treatment == 1].ravel()
-            self.covariates_treated = self.covariates[self.treatment == 1, :]
-        else:
-            return self.outcome_treated, self.covariates_treated
-
-    def _control_samples(self):
-        if not self.splitted:
-            self.outcome_control = self.outcome[self.treatment == 0].ravel()
-            self.covariates_control = self.covariates[self.treatment == 0, :]
-        else:
-            return self.outcome_control, self.covariates_control
-
-    def print_shapes(self):
-        print('Print Shapes')
-        print(self.outcome.shape, self.treatment.shape, self.covariates.shape)
-        if self.splitted:
-            print(self.outcome_control.shape, self.covariates_control.shape)
-            print(self.outcome_treated.shape, self.covariates_treated.shape)
-
-    def _load_ihdp(self):
-        """Loads semi-synthetic data.
-
-    It updates the object DataSimulation.
-
-    Args:
-      self
-    Returns:
-      None
-    """
-        self.data_path = self.param_data['data_path'] + 'IHDP/'
-        # Reference: https://github.com/AMLab-Amsterdam/CEVAE
-        # each iteration, it randomly pick one of the 10 existing repetitions
-        np.random.seed(self.seed)
-
-        i = np.random.randint(1, 10, 1)[0]
-        path = self.data_path + '/ihdp_npci_' + str(i) + '.csv.txt'
-        with gfile.GFile(path, 'r') as f:
-            data = np.loadtxt(f, delimiter=',')
-
-        self.outcome, y_cf = data[:, 1][:, np.newaxis], data[:, 2][:, np.newaxis]
-        self.outcome = self.outcome.ravel()
-        self.treatment = data[:, 0].ravel()
-        self.covariates = data[:, 5:]
-        scaler = StandardScaler()
-        self.covariates = scaler.fit_transform(self.covariates)
-
-        self.sample_size, self.num_covariates = self.covariates.shape
-        self.linear, self.noise = False, False
-        self.var_covariates = None
-        self.treatment_prop = self.treatment.sum() / len(self.treatment)
-
-        # y1, y0 = self.outcome, self.outcome
-        y1 = [
-            y_cf[j][0] if item == 0 else self.outcome[j]
-            for j, item in enumerate(self.treatment)
-        ]
-        y0 = [
-            y_cf[j][0] if item == 1 else self.outcome[j]
-            for j, item in enumerate(self.treatment)
-        ]
-        y1 = np.array(y1)
-        y0 = np.array(y0)
-        self.tau = (y1 - y0).mean()
-
-    def _load_acic(self):
-        """Loads semi-synthetic data.
-
-        It updates the object DataSimulation.
-
-        Args:
-          self
-        Returns:
-          None
-        """
-        self.data_path = self.param_data['data_path'] + 'ACIC/'
-        if self.param_data['data_low_dimension']:
-            true_ate_path = self.data_path + 'lowDim_trueATE.csv'
-            self.data_path = self.data_path + 'low_dimensional_datasets/'
-        else:
-            true_ate_path = self.data_path + 'highDim_trueATE.csv'
-            self.data_path = self.data_path + 'high_dimensional_datasets/'
-
-        np.random.seed(self.seed)
-        i = np.random.randint(0, len(gfile.listdir(self.data_path)), 1)[0]
-
-        path = gfile.listdir(self.data_path)[i]
-        with gfile.GFile(self.data_path + path, 'r') as f:
-            data = pd.read_csv(f, delimiter=',')
-
-        self.outcome = data['Y'].values
-        self.treatment = data['A'].values
-        self.covariates = data.drop(['Y', 'A'], axis=1).values
-        scaler = StandardScaler()
-        self.covariates = scaler.fit_transform(self.covariates)
-
-        self.sample_size, self.num_covariates = self.covariates.shape
-        self.linear, self.noise = False, False
-        self.var_covariates = None
-        self.treatment_prop = self.treatment.sum() / len(self.treatment)
-
-        with gfile.GFile(true_ate_path, 'r') as f:
-            true_ate = pd.read_csv(f, delimiter=',')
-
-        path = path[:-4]
-        true_ate_row = true_ate[true_ate['filename'] == path]
-        self.tau = true_ate_row['trueATE'].values[0]
-
-
 def repeat_experiment(data, param_method):
     repetitions = param_method.get('repetitions', 1)
     for b in range(repetitions):
@@ -214,47 +64,24 @@ def experiments(data, seed, param_method):
     # del seed
     start = time.time()
     estimator = param_method['estimator']
-    param_grid = param_method['param_grid']
-    tau_, mse, bias, var_tau = estimator(data, param_method, param_grid,
+    tau_, mse, bias, var_tau = estimator(data=data,
+                                         param_method=param_method,
                                          type=param_method['name_estimator'],
                                          seed=seed)
-    if data.is_Image:
-        tab = {
-            't_est': tau_,
-            'mse0': mse[0],
-            'mse1': mse[1],
-            'bias0': bias[0],
-            'bias1': bias[1],
-            'variance': var_tau,
-            'name': data.name,
-            'seed': seed,
-            'method_estimator': param_method['name_estimator'],
-            'method_base_model': param_method['name_base_model'],
-            'method_metric': param_method['name_metric'],
-            'time': time.time() - start,
-        }
-    else:
-        tab = {
-            't_est': tau_,
-            't_real': data.tau,
-            'mae': np.abs(data.tau - tau_),
-            'mse0': mse[0],
-            'mse1': mse[1],
-            'bias0': bias[0],
-            'bias1': bias[1],
-            'variance': var_tau,
-            'name': data.name,
-            'data_n': data.sample_size,
-            'data_num_covariates': data.num_covariates,
-            'data_noise': data.noise,
-            'data_linear': data.linear,
-            'data_treatment_prop': np.sum(data.treatment) / data.sample_size,
-            'method_estimator': param_method['name_estimator'],
-            'method_base_model': param_method['name_base_model'],
-            'method_metric': param_method['name_metric'],
-            'method_prop_score': param_method['name_prop_score'],
-            'time': time.time() - start,
-        }
+    tab = {
+        't_est': tau_,
+        'mse0': mse[0],
+        'mse1': mse[1],
+        'bias0': bias[0],
+        'bias1': bias[1],
+        'variance': var_tau,
+        'name': data.name,
+        'seed': seed,
+        'method_estimator': param_method['name_estimator'],
+        'method_base_model': param_method['name_base_model'],
+        'method_metric': param_method['name_metric'],
+        'time': time.time() - start,
+    }
 
     return tab, list(tab.keys())
 
@@ -314,7 +141,6 @@ class ImageData:
         self.dataset_control = _get_dataset(ds_control, batch_size=batch_size)
         self.dataset_all = _get_dataset(ds_all, batch_size=batch_size)
         self.dataset_all_ps = _get_dataset_ps(ds_all_ps, batch_size=batch_size)
-        self.is_Image = param_data.get('is_Image', True)
         self.b = param_data.get('b', 1)
 
     def make_plot(self):

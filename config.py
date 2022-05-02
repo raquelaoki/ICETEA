@@ -53,12 +53,10 @@ class MakeParameters:
     def __init__(self, configs_data, configs_methods):
         super(MakeParameters, self).__init__()
 
-        configs_data['is_Image'] = configs_data.get('is_Image', False)
+        #configs_data['is_Image'] = configs_data.get('is_Image', False)
 
         self.config_data = _create_configs(configs_data)
 
-        #self.config_methods = _create_configs(configs_methods)
-        #self.parameters_data = _read_data_configs(self.config_data)
         self.config_methods = _read_method_configs(
             _create_configs(configs_methods),
             self.config_data[0]['name'],
@@ -106,163 +104,49 @@ def _read_method_configs(config_methods,
     parameters_method = []
     for config in config_methods:
         parameters = config
+
         parameters['estimator'] = estimators.estimator
-        parameters['base_model'] = _base_learner(parameters['name_base_model'], data_name)
+        parameters['base_model'] = _base_image_model_construction({'name_base_model': parameters['name_base_model']})
         parameters['metric'] = _metric_function(parameters['name_metric'])
         parameters['prop_score'] = _prop_score_function(parameters['name_prop_score'])
-        parameters['param_grid'] = _create_param_grid(parameters['name_base_model'],
-                                                      data_name, setting, data_low_dimension)
 
         parameters_method.append(parameters)
     return parameters_method
 
-"""
-def _read_data_configs(config_data):
-    Creates list of dictionaries.
 
-  Each dict is a set of config parameters for the data.
-  Args:
-    config_data: dictionary with data parameters
-  Returns:
-    list with all config parameters.
-  
-    parameters_data = []
-    for config in config_data:
-        parameters = config
-        if config['data_name'] == 'simple_linear':
-            parameters['data_name'] = config['data_name']
-            parameters['sample_size'] = config['data_n']
-            parameters['num_covariates'] = config['data_num_covariates']
-            parameters['noise'] = config['data_noise']
-            parameters['linear'] = config['data_linear']
-        elif config['data_name']=='kagle_retinal':
-            parameters['data_name'] = config['data_name']
-            parameters['data_path'] = config['data_path']
-
-
-        else:
-            parameters['data_name'] = config['data_name']
-            parameters['data_path'] = config['data_path']
-            parameters['data_low_dimension'] = config.get('data_low_dimension', False)
-        parameters_data.append(parameters)
-    return parameters_data
-"""
-
-def _create_param_grid(name_model, data_name, setting, data_low_dimension):
-    """Creates parameters for GridSearchCV.
+def _base_image_model_construction(model_config):
+    """Constructs the image base model.
 
   Args:
-    name_model: name of the base model.
-    data_name: str, synthethic, ACIC, IHDP
-    setting: str, quick (for testing), samples or covariates (synthetic)
-    data_low_dimension: bool, only when data_name == ACIC
+    model_config: dicstionary with parameters
   Returns:
-    dictionary with parameters.
+    model: Model object
   """
-    if name_model == 'Lasso':
-        return {'alpha': [0.01, 0.1, 1]}
-    elif name_model == 'GBoost':
-        return {'n_estimators': [30], 'min_samples_split': [3, 5, 15]}
-    elif name_model == 'RandomForest':
-        return {'n_estimators': [30], 'min_samples_leaf': [3, 5, 15]}
-    elif name_model == 'ElasticNet':
-        return {'alpha': [0.01, 0.1, 1]}
-    elif name_model == 'NN_regression':
-        if data_name == 'simple_linear':
-            if setting == 'covariates':
-                return {
-                    'batch_size': [200],
-                    'epochs': [25],
-                    'h_units': [1, 10, 50, 100, 500],
-                    'learning_rate': [0.01],
-                    'l1': [0.01],
-                }
-            elif setting == 'quick':
-                return {
-                    'batch_size': [200],
-                    'epochs': [25],
-                    'h_units': [5],
-                    'learning_rate': [0.01],
-                    'l1': [0.01],
-                }
-            else:
-                return {
-                    'batch_size': [10, 25],
-                    'epochs': [100],
-                    'h_units': [1, 5],
-                    'learning_rate': [0.01],
-                    'l1': [0.01, 0.1],
-                }
-        elif data_name == 'IHDP':
-            return {
-                'batch_size': [75],
-                'epochs': [75],
-                'h_units': [5, 10],
-                'l1': [0.1],
-                'learning_rate': [0.01, 0.1]
-            }
-        elif data_name == 'ACIC':
-            if data_low_dimension:
-                return {
-                    'batch_size': [200],
-                    'epochs': [150],
-                    'h_units': [5, 10, 15],
-                    'l1': [0.0001, 0.01],
-                    'learning_rate': [0.01]
-                }
-            else:
-                return {
-                    'batch_size': [200],
-                    'epochs': [150],
-                    'h_units': [50, 100],
-                    'l1': [0.0001],
-                    'learning_rate': [0.01]
-                }
-        else:
-            return None
-    else:
-        return None
+    name_base_model = model_config.get('name_base_model', 'inceptionv3')
+    model_config['weights'] = 'imagenet'
+    model_config['input_shape'] = (256, 256, 3)
 
-
-def _base_learner(name_model, data_name):
-    """Creates base-model object.
-
-  Args:
-    name_model: name of the base-model.
-    data_name: name of the dataset
-  Raises:
-    Exception: Not Implemented Error.
-  Returns:
-    model object.
-  """
-    if name_model == 'LinearRegression':
-        return linear_model.LinearRegression()
-    elif name_model == 'Lasso':
-        return linear_model.Lasso()
-    elif name_model == 'RandomForest':
-        return ensemble.RandomForestRegressor()
-    elif name_model == 'ElasticNet':
-        return linear_model.ElasticNet()
-    elif name_model == 'XGBoost':
-        return ensemble.GradientBoostingRegressor()
-    elif name_model == 'NN_regression':
-        if data_name == 'ACIC':
-            return KerasRegressor(build_fn=create_nn_regression_acic, verbose=0)
-        elif data_name == 'IHDP':
-            return KerasRegressor(build_fn=create_nn_regression_ihdp, verbose=0)
-        else:
-            return KerasRegressor(build_fn=create_nn_regression, verbose=0)
-    elif name_model == 'MeanDiff':
-        return _MeanDiff()
-    elif name_model == 'resnet50':
-        model_config = {'weights': 'imagenet', 'input_shape': (256, 256, 3), 'name_base_model': 'resnet50'}
-        return image_model_construction(model_config)
-    elif name_model == 'inceptionv3':
-        model_config = {'weights': 'imagenet', 'input_shape': (256, 256, 3), 'name_base_model': 'inceptionv3'}
-        return image_model_construction(model_config)
+    if name_base_model == 'inceptionv3':
+        model = image_model_inceptionv3(model_config)
+        initial_learning_rate = 0.001
+    elif name_base_model == 'resnet50':
+        model = image_model_resnet50(model_config)
+        initial_learning_rate = 0.001
+    elif name_base_model == 'image_regression':
+        model = image_model_regression(model_config)
+        initial_learning_rate = 0.01
     else:
         raise NotImplementedError(
-            'Estimator not supported:{}'.format(name_model))
+            'Estimator not supported:{}'.format(name_base_model))
+
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate, decay_steps=30, decay_rate=0.9, staircase=True)
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
+        loss='mean_squared_error',
+        metrics=['mse', 'mae'])
+    return model
 
 
 def _metric_function(name_metric):
@@ -276,85 +160,11 @@ def _metric_function(name_metric):
 def _prop_score_function(name_prop_score):
     if name_prop_score == 'LogisticRegression':
         return linear_model.LogisticRegression()
-    elif name_prop_score == 'prop':
-        return _Prop()
     elif name_prop_score == 'LogisticRegression_NN':
         return _LogisticRegressionNN()
     else:
         raise NotImplementedError(
             'Estimator not supported:{}'.format(name_prop_score))
-
-
-def create_nn_regression_acic(h_units, l1, learning_rate=0.01):
-    """Make Neural Network Model.
-
-  It defines a two dense layers without activation, plus an output layer with
-  linear activation. This architecture was defined according to preliminary
-  tests.
-  Args:
-    h_units: hidden units
-    l1: l1 regularization
-    learning_rate: learning rate
-  Returns:
-    model: keras object
-  """
-    model = Sequential()
-    model.add(
-        Dense(h_units, use_bias=True, kernel_regularizer=regularizers.l1(l1=l1)))
-    model.add(
-        Dense(h_units, use_bias=True, kernel_regularizer=regularizers.l1(l1=l1)))
-    model.add(Dense(1, activation='linear', use_bias=True))
-    opt = optimizers.Adam(learning_rate=learning_rate)
-    model.compile(loss='mse', optimizer=opt, loss_weights=[1.])
-    return model
-
-
-def create_nn_regression_ihdp(h_units, l1, learning_rate=0.01):
-    """Make Neural Network Model.
-
-  Defines a two dense layers with relu, plus an output layer with linear
-  activation. This architecture was defined according to preliminary
-  tests.
-  Args:
-    h_units: hidden units
-    l1: l1 regularization
-    learning_rate: learning rate
-  Returns:
-    model: keras object
-  """
-    model = Sequential()
-    model.add(
-        Dense(h_units, use_bias=True, activation='relu',
-              kernel_regularizer=regularizers.l1(l1=l1)))
-    model.add(
-        Dense(h_units, use_bias=True, activation='relu',
-              kernel_regularizer=regularizers.l1(l1=l1)))
-    model.add(Dense(1, activation='linear', use_bias=True))
-    opt = optimizers.Adam(learning_rate=learning_rate)
-    model.compile(loss='mse', optimizer=opt, loss_weights=[1.])
-    return model
-
-
-def create_nn_regression(h_units, l1, learning_rate=0.01):
-    """Make Neural Network Model.
-
-  Defines a one layer without activation plus another dense layer with linear
-  activation function. This architecture was defined according to preliminary
-  tests.
-  Args:
-    h_units: hidden units
-    l1: l1 regularization
-    learning_rate: learning rate
-  Returns:
-    model: keras object
-  """
-    model = Sequential()
-    model.add(
-        Dense(h_units, use_bias=True, kernel_regularizer=regularizers.l1(l1=l1)))
-    model.add(Dense(1, activation='linear', use_bias=True))
-    opt = optimizers.Adam(learning_rate=learning_rate)
-    model.compile(loss='mse', optimizer=opt, loss_weights=[1.])
-    return model
 
 
 class _LogisticRegressionNN:
@@ -426,33 +236,6 @@ class _LogisticRegressionNN:
         model = tf.keras.Model(
             inputs=inputs, outputs=outputs, name='LogisticRegression')
         return model
-
-
-class _Prop:
-    """Make Proportion Object.
-
-  Used as Propensity Score Model, it returns the proportion of treated.
-  """
-
-    def fit(self, x):
-        self.n = x.shape[0]
-
-    def predict_proba(self, x):
-        del x
-        return np.repeat(0.5, 2 * self.n).reshape(self.n, 2)
-
-
-class _MeanDiff:
-    """Make Difference of Mean Base Model.
-
-  """
-
-    def fit(self, x, y):
-        self.y = y
-        self.x = x
-
-    def predict(self, x):
-        return np.repeat(self.y.mean(), x.shape[0])
 
 
 def image_model_regression(model_config):
@@ -537,33 +320,3 @@ def image_model_resnet50(model_config):
     return model
 
 
-def image_model_construction(model_config):
-    """Constructs the image base model.
-
-  Args:
-    model_config: dicstionary with parameters
-  Returns:
-    model: Model object
-  """
-    name_base_model = model_config.get('name_base_model', 'inceptionv3')
-    if name_base_model == 'inceptionv3':
-        model = image_model_inceptionv3(model_config)
-        initial_learning_rate = 0.001
-    elif name_base_model == 'resnet50':
-        model = image_model_resnet50(model_config)
-        initial_learning_rate = 0.001
-    elif name_base_model == 'image_regression':
-        model = image_model_regression(model_config)
-        initial_learning_rate = 0.01
-    else:
-        raise NotImplementedError(
-            'Estimator not supported:{}'.format(name_base_model))
-
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate, decay_steps=30, decay_rate=0.9, staircase=True)
-
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
-        loss='mean_squared_error',
-        metrics=['mse', 'mae'])
-    return model

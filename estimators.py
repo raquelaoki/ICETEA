@@ -37,69 +37,12 @@ def default_param_method():
     return param_method
 
 
-def fit_model(x_z, y_z, model, x, metric, param_grid=None):
-    """Function to fit the base-learner, m_z model.
-
-  m_z is trained in x_z, and returns predictions of x.
-
-  Args:
-    x_z: subset of covariates where Z = z
-    y_z: subset of targets where Z = z
-    model: base learner
-    x: full covariates dataset
-    metric: evaluation metric
-    param_grid: dict with parameters for grid search
-  Returns:
-    counterfactual: np.array, x predicted on m_z
-    mse: float,
-    bias: float
-  """
-    if param_grid is not None:
-        param_grid = update_param_grid(param_grid, x_z.shape)
-        gscv = model_selection.GridSearchCV(model, param_grid=param_grid,
-                                            scoring='neg_mean_squared_error')
-        gscv.fit(X=x_z, y=y_z)
-        mse = metric(y_z, gscv.predict(x_z))
-        bias = (gscv.predict(x_z) - y_z).mean()
-        counterfactual = gscv.predict(x)
-        return counterfactual, mse, bias
-    else:
-        model.fit(x_z, y_z)
-        mse = metric(y_z, model.predict(x_z))
-        error = np.subtract(model.predict(x_z), y_z).mean()
-        counterfactual = model.predict(x)
-        return counterfactual, mse, error
-
-
-def update_param_grid(param_grid, sizes):
-    """Update parameters of the grid search.
-
-  Args:
-    param_grid: current grid search dictionary
-    sizes: dataset.shape
-  Returns:
-    param_grid: updated grid search dictionary
-  """
-    if 'h_units' in param_grid.keys():
-        # NN and simple_linear data
-        if sizes[1] > 1:
-            param_grid['h_units'] = [i for i in param_grid['h_units'] if i < sizes[1]]
-        else:
-            param_grid['h_units'] = [1]
-
-        if sizes[0] > 10001:
-            param_grid['batch_size'] = [600]
-    return param_grid
-
-
-def estimator(data, param_method=None, param_grid=None,
-              type='oahaca', seed=0):
+def estimator(data, param_method=None,  type='oahaca', seed=0):
     """Estimate treatment effect.
 
   Args:
     data: DataSimulation Class
     param_method: dict with method's parameters
-    param_grid: dict with grid search parameters
     type: oahaca, aipw
   Returns:
     t_estimated: estimated treatment effect using the oaxaca-blinder method
@@ -115,64 +58,35 @@ def estimator(data, param_method=None, param_grid=None,
     if param_method is None:
         param_method = default_param_method()
 
-    if data.is_Image:
-        print('param_method', param_method)
-        # Fitting two models, one per treatment value.
-        pred_control, mse_control, e_control, treated, y0_c = fit_base_image_models(
-            data.dataset_control,
-            param_method['base_model'],
-            data.dataset_all,
-            param_method)
-        pred_treated, mse_treated, e_treated, treated, y1_c = fit_base_image_models(
-            data.dataset_treated,
-            param_method['base_model'],
-            data.dataset_all,
-            param_method)
+    print('param_method', param_method)
+    # Fitting two models, one per treatment value.
+    pred_control, mse_control, e_control, treated, y0_c = fit_base_image_models(
+        data.dataset_control,
+        param_method['base_model'],
+        data.dataset_all,
+        param_method)
+    pred_treated, mse_treated, e_treated, treated, y1_c = fit_base_image_models(
+        data.dataset_treated,
+        param_method['base_model'],
+        data.dataset_all,
+        param_method)
 
-        if type == 'oahaca':
-            # Fill-in unobserved // counterfactual.
-            y0_c[treated] = pred_control[treated]
-            y1_c[~treated] = pred_treated[~treated]
+    if type == 'oahaca':
+        # Fill-in unobserved // counterfactual.
+        y0_c[treated] = pred_control[treated]
+        y1_c[~treated] = pred_treated[~treated]
 
-            # Variance.
-            n0 = len(treated) - treated.sum()
-            n1 = treated.sum()
-            # Variance and treatment effect estimation
-            var = mse_control / n0 + mse_treated / n1
-            tau_estimated = (y1_c - y0_c).mean()
+        # Variance.
+        n0 = len(treated) - treated.sum()
+        n1 = treated.sum()
+        # Variance and treatment effect estimation
+        var = mse_control / n0 + mse_treated / n1
+        tau_estimated = (y1_c - y0_c).mean()
 
-        else:
-            x = data.dataset_all_ps
-            tau_estimated, var = _calculate_propensity_score(param_method, x, data, pred_treated, pred_control,
-                                                             t=treated, y0=y0_c, y1=y1_c)
     else:
-        # Subset treatment and control group.
-        # data.split()
-        y0, x0 = data.outcome_control, data.covariates_control
-        y1, x1 = data.outcome_treated, data.covariates_treated
-
-        # Fitting two models, one per treatment value.
-        pred_control, mse_control, e_control = fit_model(
-            x0, y0, param_method['base_model'], data.covariates,
-            param_method['metric'], param_grid)
-        pred_treated, mse_treated, e_treated = fit_model(
-            x1, y1, param_method['base_model'], data.covariates,
-            param_method['metric'], param_grid)
-
-        if type == 'oahaca':
-            # Fill-in unobserved // counterfactual.
-            treated = data.treatment == 1
-            y0_c = data.outcome.copy()
-            y1_c = data.outcome.copy()
-            y0_c[treated] = pred_control[treated]
-            y1_c[~treated] = pred_treated[~treated]
-            # Variance and treatment effect estimation
-            var = mse_control / len(y0) + mse_treated / len(y1)
-            tau_estimated = (y1_c - y0_c).mean()
-        else:
-            x = data.covariates
-            tau_estimated, var = _calculate_propensity_score(param_method, x, data, pred_treated, pred_control,
-                                                             treated, y0, y1)
+        x = data.dataset_all_ps
+        tau_estimated, var = _calculate_propensity_score(param_method, x, data, pred_treated, pred_control,
+                                                         t=treated, y0=y0_c, y1=y1_c)
 
     bias = [e_control, e_treated]
 
