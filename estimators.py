@@ -96,27 +96,60 @@ def estimator(data, param_method=None,  type='oahaca', seed=0):
     return tau_estimated, metric, bias, var
 
 
-def _calculate_propensity_score(param_method, x, data, pred_treated, pred_control, t, y0, y1):
-    # Propensity score using a logistic regression.
-    prop_score = param_method['prop_score']
-    prop_score.fit(x)
-    e = prop_score.predict_proba(x)
+def _truncate_by_g(attribute, g, level=0.005):
+    """
+    Remove rows with too low or too high g values. attribute and g must have same dimensions.
+    :param attribute: column we want to keep after filted
+    :param g: filter
+    :param level: limites
+    :return: filted attribute column
+    """
+    assert len(attribute) == len(g), 'Dimensions must be the same!' + str(len(attribute)) + ' and ' + str(len(g))
+    keep_these = np.logical_and(g >= level, g <= 1. - level)
+    return attribute[keep_these]
 
-    # Estimating the treatment effect.
-    pred_dif = (pred_treated - pred_control)
+
+def _calculate_propensity_score(param_method, x, data, pred_treated, pred_control, t, y0, y1):
+
     try:
         z = data.treatment.ravel()
         y = data.outcome.ravel()
     except AttributeError:
         z = t * 1
-        y = y0
-    sample_size = len(y)
+        y = y0.ravel()
 
-    residual_treated = (z * (y - pred_treated))
-    residual_treated = (residual_treated / e[:, 1].ravel())
 
-    residual_control = ((1 - z) * (y - pred_control))
-    residual_control = (residual_control / e[:, 0].ravel())
+    if param_method['learn_prop_score']:
+        # Propensity score using a logistic regression.
+        prop_score = param_method['prop_score']
+        prop_score.fit(x)
+        e = prop_score.predict_proba(x)
+        # Removing extreme values
+        # print('y shaoes', y.shape, type(y))
+        g = e[:, 1].ravel()
+        y = _truncate_by_g(y.reshape(-1, 1), g, 0.005)
+        z = _truncate_by_g(z, g, 0.005)
+        pred_treated = _truncate_by_g(pred_treated, g, 0.005)
+        pred_control = _truncate_by_g(pred_control, g, 0.005)
+        e = _truncate_by_g(e, g, 0.005)
+
+        # Estimating the treatment effect.
+        pred_dif = (pred_treated - pred_control)
+        sample_size = len(y)
+        residual_treated = (z * (y - pred_treated))
+        residual_control = ((1 - z) * (y - pred_control))
+
+        residual_treated = (residual_treated / e[:, 1].ravel())
+        residual_control = (residual_control / e[:, 0].ravel())
+
+    else:
+        # Estimating the treatment effect.
+        pred_dif = (pred_treated - pred_control)
+        sample_size = len(y)
+        residual_treated = (z * (y - pred_treated))
+        residual_control = ((1 - z) * (y - pred_control))
+        residual_treated = (residual_treated / 0.5)
+        residual_control = (residual_control / 0.5)
 
     residual_dif = (residual_treated - residual_control)
     tau_estimated = np.mean(np.add(pred_dif, residual_dif))
@@ -131,7 +164,7 @@ def _calculate_propensity_score(param_method, x, data, pred_treated, pred_contro
     return tau_estimated, var
 
 
-def _prediction_image_models(data, model):  # quick=False
+def _prediction_image_models(data, model, step_lim=50):  # quick=False
     """Predicts the outcome on the full data.
 
   Args:
@@ -148,8 +181,8 @@ def _prediction_image_models(data, model):  # quick=False
         y_pred.append(model.predict_on_batch(batch_x))
         y_sim.append(batch_y.numpy())
         t.append(batch_t.numpy())
-        # if quick and i > 2000:
-        #    break
+        if step_lim>i:
+            break
 
     y_pred_flat = np.concatenate(y_pred).ravel()
     y_sim_flat = np.concatenate(y_sim).ravel()

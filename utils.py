@@ -39,10 +39,10 @@ TensorDict = Dict[str, tf.Tensor]
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def repeat_experiment(data, param_method):
+def repeat_experiment(data, param_method, seed):
     repetitions = param_method.get('repetitions', 1)
     for b in range(repetitions):
-        resul, columns = experiments(data=data, seed=b, param_method=param_method)
+        resul, columns = experiments(data=data, seed=seed, param_method=param_method)
         if b == 0:
             tab = pd.DataFrame(columns=columns)
             tab = tab.append(resul, ignore_index=True)
@@ -248,6 +248,7 @@ def _get_dataset_ps(dataset, batch_size):
         return batch0, batch1
 
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    dataset = dataset.repeat()
     dataset = dataset.batch(batch_size).map(_preprocessing_ps)
 
     return dataset
@@ -262,5 +263,6 @@ def _get_dataset(dataset, batch_size):
     dataset: tf.data.Dataset batches
   """
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    dataset = dataset.repeat()
     dataset = dataset.batch(batch_size)
     return dataset
