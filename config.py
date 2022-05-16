@@ -59,9 +59,8 @@ class MakeParameters:
 
         self.config_methods = _read_method_configs(
             _create_configs(configs_methods),
-            self.config_data[0]['name'],
-            self.config_data[0].get('setting', None),
-            self.config_data[0].get('data_low_dimension', False),
+            #self.config_data[0]['name'],
+            #self.config_data[0].get('setting', None),
         )
 
 
@@ -87,9 +86,7 @@ def _create_configs(dict_):
 
 
 def _read_method_configs(config_methods,
-                         data_name,
-                         setting,
-                         data_low_dimension):
+                         ):
     """Creates list of dictionaries.
 
   Each dict is a set of config parameters for the methods.
@@ -97,7 +94,6 @@ def _read_method_configs(config_methods,
     config_methods: list of dictionaries
     data_name: string with data name
     setting: quick (for testing), samples or covariates analysies
-    data_low_dimension: bool, only used when data is ACIC
   Returns:
      list with all config parameters, some of them are objects
   """
@@ -185,18 +181,16 @@ class _LogisticRegressionNN:
     """
         self.model.compile(
             optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        epochs = 20
-        steps = 20
+        epochs = 10
 
         self.model.summary()
-        self.model.fit(data, epochs=epochs, steps_per_epoch=steps, verbose=2)
+        self.model.fit(data, epochs=epochs, verbose=2)
 
-    def predict_proba(self, data, quick=True):
+    def predict_proba(self, data):
         """Predict Probability of each class.
 
     Args:
       data: tf.data.Dataset
-      quick: subset of the images
     Returns:
       predict: predictions array
     """
@@ -205,8 +199,8 @@ class _LogisticRegressionNN:
         for i, (batch_x, batch_t) in enumerate(data):
             t_pred.append(self.model.predict_on_batch(batch_x))
             t.append(batch_t.numpy())
-            if quick and i > 2000:
-                break
+            #if quick and i > 2000:
+            #    break
 
         t_pred = np.concatenate(t_pred).ravel().reshape(-1, 2)
         return t_pred
@@ -214,27 +208,33 @@ class _LogisticRegressionNN:
     def _logistic_regression_architecture(self):
         """Implements of Propensity Score.
 
-    It takes as input tensors of shape [B, H, W, C] and outputs [B,Y]
-    Returns:
-      model: NN object
-    """
-        backbone = tf.keras.applications.ResNet50(
-            include_top=False, weights='imagenet', input_shape=(256, 256, 3))
-
+        It takes as input tensors of shape [B, H, W, C] and outputs [B,Y]
+        Returns:
+          model: NN object
+        """
         # A simple logistic regression implemented as NN.
         inputs = tf.keras.Input(shape=[*IMAGE_SIZE, 3], name='LogisticRegression')
-        x = backbone(inputs)
-        x = tf.keras.layers.Dropout(0.4)(x)
-        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+
+        backbone = tf.keras.applications.ResNet50(
+            include_top=False,
+            weights='imagenet',
+            input_shape=(*IMAGE_SIZE, 3),
+            pooling= 'avg', )
+        backbone_drop_rate = 0.2
+
+        inputs = tf.keras.Input(shape=[*IMAGE_SIZE, 3], name='image')
+        hid = backbone(inputs)
+        hid = tf.keras.layers.Dropout(backbone_drop_rate)(hid)
+
         outputs = tf.keras.layers.Dense(2, activation='softmax', use_bias=True,
                                         kernel_regularizer=regularizers.l1_l2(
                                             l1=1e-5,
                                             l2=1e-4),
                                         bias_regularizer=regularizers.l2(1e-4),
                                         activity_regularizer=regularizers.l2(1e-5)
-                                        )(x)
-        model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name='LogisticRegression')
+                                        )(hid)
+        model = tf.keras.Model(inputs=inputs, outputs=outputs, name='LogisticRegression')
+
         return model
 
 
@@ -285,8 +285,7 @@ def image_model_inceptionv3(model_config):
     outputs = tf.keras.layers.Dense(1, activation=last_activation,
                                     use_bias=True)(hid)
 
-    model = tf.keras.Model(
-        inputs=inputs, outputs=outputs, name='inceptionv3')
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name='inceptionv3')
 
     return model
 
@@ -305,16 +304,19 @@ def image_model_resnet50(model_config):
     last_activation = model_config.get('activation', 'linear')
     backbone = tf.keras.applications.ResNet50(
         include_top=False,
-        weights='imagenet',
-        input_shape=(256, 256, 3)
-    )
+        weights=model_config.get('weights', 'imagenet'),
+        input_shape=(*IMAGE_SIZE, 3),
+        pooling=model_config.get('pooling', 'avg'),)
+
+    backbone_drop_rate = model_config.get('backbone_drop_rate', 0.2)
 
     inputs = tf.keras.Input(shape=[*IMAGE_SIZE, 3], name='image')
-    x = backbone(inputs)
-    x = tf.keras.layers.Dropout(0.4)(x)
-    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+
+    hid = backbone(inputs)
+    hid = tf.keras.layers.Dropout(backbone_drop_rate)(hid)
+    #x = tf.keras.layers.GlobalAveragePooling2D()(x)
     outputs = tf.keras.layers.Dense(1, activation=last_activation,
-                                    use_bias=True)(x)
+                                    use_bias=True)(hid)
 
     model = tf.keras.Model(inputs=inputs, outputs=outputs, name='resnet50')
     return model
