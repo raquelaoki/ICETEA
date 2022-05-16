@@ -48,15 +48,14 @@ def generate_simulations(path_root,
 
     def _generation_weights(n_cols=2048, alpha=2):
         """Generate initial weights.
-
         :param n_cols: dimension of weights.
         :param alpha: treatment effect knob.
         :return: matrices with weights.
         """
         phi = np.random.uniform(-1, 1, n_cols)
-        # Multiply by 1.5 and 1.8 so it's not centered in 0.
-        eta_1 = np.random.uniform(alpha, alpha * 1.5, n_cols)
-        eta_0 = np.random.uniform(alpha, alpha * 1.8, n_cols)
+        scale = np.random.uniform(0, alpha,1)
+        eta_1 = np.random.uniform(-1, 1 * scale, n_cols)
+        eta_0 = np.random.uniform(-1, 1 , n_cols)
         return phi, eta_1, eta_0
 
     def _pi_x_function(features, gam, beta=0.5):
@@ -156,14 +155,11 @@ def generate_simulations(path_root,
     for i in range(b):
         output_ = pd.DataFrame()
         for j, (alpha_, beta_, gamma_) in enumerate(list(itertools.product(alpha, beta, gamma))):
-            np.random.seed(i * 1000 + j)
+            np.random.seed(i * 100 + j)
             phi, eta1, eta0 = _generation_weights(features.shape[1], alpha_)
             pi = _pi_x_function(features.values, phi, beta_)
             mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_)
-            #y = mu1
             y = [mu0[i][0] if p == 0 else mu1[i][0] for i, p in enumerate(pi)]
-            #y[pi == 0] = mu0[pi == 0]
-            #print('checking',pi[0:10]==0, pi[0:10])
             knob = str(alpha_) + '_' + str(beta_) + '_' + str(gamma_)
             prefix = 'sim' + name_id + str(j) + '_b' + str(i) + '_' + knob
 
