@@ -92,6 +92,12 @@ def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extrac
     meta_data['side'] = meta_data.apply(lambda x: x['image_name'].split('_')[1], axis=1)
     meta_data['side'] = meta_data.apply(lambda x: 1 if x['side'] == 'right' else 0, axis=1)  # Right is 1, Left is 0
 
+    print('head meta_data')
+    print(meta_data.head())
+    print('type meta_data[image_name]: ',type(meta_data['image_name'].values[0]))
+    print('type meta_data[target]: ',type(meta_data['target'].values[0]))
+    print('type meta_data[side]: ',type(meta_data['side'].values[0]))
+
     # 2. Recover the paths to all images
     image_files = os.listdir(os.path.join(paths['root'], paths['images']))
 

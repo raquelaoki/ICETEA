@@ -1,8 +1,6 @@
 """ ICETEA Data simulation.
 
 """
-
-import concurrent.futures
 import itertools
 import math
 import numpy as np
@@ -46,7 +44,7 @@ def generate_simulations(path_root,
     gamma_range: list with values to be explored if knob_s True (defoult values also provided)
     """
 
-    def _generation_weights(n_cols=2048, alpha=2):
+    def _generation_weights(n_cols=2048, alpha=10):
         """Generate initial weights.
         :param n_cols: dimension of weights.
         :param alpha: treatment effect knob.
@@ -82,7 +80,7 @@ def generate_simulations(path_root,
         t = [np.random.binomial(1, item) for item in pi]
         return t
 
-    def _mu_x_function(features, eta1, eta0, gamma=1):
+    def _mu_x_function(features, eta1, eta0, gamma=0.5, scale=False):
         """ Calcualte the outcome.
         :param features: input features, extracted on phase 1 of the framework;
         :param eta0: weights if untreated
@@ -104,47 +102,55 @@ def generate_simulations(path_root,
 
         mu1 = np.multiply(gamma, mu1)
         mu0 = np.multiply(gamma, mu0)
+
+
         mu1_ones = np.multiply(1 - gamma, mu1_ones)
         mu0_ones = np.multiply(1 - gamma, mu0_ones)
+        mu1, mu0 = mu1 + mu1_ones, mu0 + mu0_ones
 
-        return mu1 + mu1_ones, mu0 + mu0_ones
+        if scale:
+            #adding a constant so tau is always 1
+            dif = 1 - (mu1.mean()-mu0.mean())
+            mu1 = mu1+dif
+
+        return mu1, mu0
 
     assert knob_h + knob_s + knob_o == 1, 'Only one knob can be True!'
+    scale=False
 
     if knob_o:
         # Make a range of values for beta
-        alpha = [1]
+        alpha = [10]
         if len(beta_range) > 0:
             beta = beta_range
         else:
-            beta = [0, 0.25, 0.5, 0.75, 1]
+            beta = [0,  0.5,  1]
         gamma = [0.5]
+        scale=True
         name_id = '_ko'
         output_name = output_name + name_id
     elif knob_h:
         # Make a range of values for gamma
-        alpha = [1]
+        alpha = [10]
         beta = [0.5]
+        scale = True
         if len(gamma_range) > 0:
             gamma = gamma_range
         else:
-            gamma = [0, 0.25, 0.5, 0.75, 1]
+            gamma = [0, 0.5, 1]
         name_id = '_kh'
         output_name = output_name + name_id
     elif knob_s:
-        # knob_s
         if len(alpha_range) > 0:
             alpha = alpha_range
         else:
-            alpha = [0.1, 0.5, 1, 2, 8]
+            alpha = [0.1, 1, 10]
         beta = [0.5]
         gamma = [0.5]
         name_id = '_ks'
         output_name = output_name + name_id
     else:
-        alpha = [1]
-        beta = [0.5]
-        gamma = [0.5]
+        raise "At least one knob must be on!"
 
     if features.empty:
         features = pd.read_csv(os.path.join(path_root, features_name))
@@ -156,9 +162,10 @@ def generate_simulations(path_root,
         output_ = pd.DataFrame()
         for j, (alpha_, beta_, gamma_) in enumerate(list(itertools.product(alpha, beta, gamma))):
             np.random.seed(i * 100 + j)
+            #print(name_id, alpha_, beta_, gamma)
             phi, eta1, eta0 = _generation_weights(features.shape[1], alpha_)
             pi = _pi_x_function(features.values, phi, beta_)
-            mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_)
+            mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_, scale=scale)
             y = [mu0[i][0] if p == 0 else mu1[i][0] for i, p in enumerate(pi)]
             knob = str(alpha_) + '_' + str(beta_) + '_' + str(gamma_)
             prefix = 'sim' + name_id + str(j) + '_b' + str(i) + '_' + knob
@@ -168,8 +175,6 @@ def generate_simulations(path_root,
             output_[prefix + '-mu0'] = mu0
             output_[prefix + '-y'] = y
         output = pd.concat([output, output_], axis=1)
-
-
 
     with gfile.GFile(os.path.join(path_root, output_name + '.csv'), 'w') as out:
         out.write(output.to_csv(index=False))
@@ -360,13 +365,6 @@ def join_tfrecord_csv(path_simulations,
                                           label_records=label_records)
         if failed:
             failed_paths_with_none.append(failed)
-    # Process each shard in parallel, pairing images and labels.
-    #with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-    #    failed_paths_with_none = list(
-    #        executor.map(_add_labels_to_tfrecords,
-    #                     add_labels_to_tfrecords_args1,
-    #                     add_labels_to_tfrecords_args2,
-    #                     label_records))
 
     # Print the filepaths of any failed runs for reprocessing.
     failed_paths = [str(path) for path in failed_paths_with_none if path]

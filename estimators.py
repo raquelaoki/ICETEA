@@ -26,6 +26,7 @@ import numpy as np
 from sklearn import linear_model
 from sklearn import metrics
 from sklearn import model_selection
+import tensorflow as tf
 
 
 def default_param_method():
@@ -208,7 +209,7 @@ def fit_base_image_models(data, model, dataset_all, model_settings):
   """
     epochs = model_settings.get('epochs', 10)
     steps = model_settings.get('steps', 10)
-    # quick = True
+
     history = model.fit(data, steps_per_epoch=steps, epochs=epochs, verbose=2)
     try:
         mse = history.history['mean_squared_error'][-1]
@@ -217,4 +218,5 @@ def fit_base_image_models(data, model, dataset_all, model_settings):
 
     bias = history.history['mae'][-1]
     y_pred, y_sim, t = _prediction_image_models(dataset_all, model)  # quick=quick
+
     return y_pred, mse, bias, t, y_sim

@@ -25,7 +25,6 @@ Experiments class: fits the estimator, return metrics
 import math
 import os
 import time
-from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -35,7 +34,6 @@ import matplotlib.pyplot as plt
 
 from tensorflow.io import gfile
 
-TensorDict = Dict[str, tf.Tensor]
 AUTOTUNE = tf.data.AUTOTUNE
 
 

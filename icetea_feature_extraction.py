@@ -4,8 +4,6 @@ Reference:
 github.com/Google-Health/genomics-research/blob/main/ml-based-vcdr/learning/model_utils.py
 """
 
-import concurrent.futures
-import itertools
 import math
 import numpy as np
 import os
