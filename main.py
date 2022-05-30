@@ -24,7 +24,8 @@ def update_experiments(filename, path_root, path_features, row, status):
     list_of_datasets.to_csv(os.path.join(path_root, path_features, filename + '.csv'))
 
 
-def main(params_path, running_indexes_path, use_tpus):
+def main(params_path, running_indexes_path, use_tpus_str):
+
     with open(params_path) as f:
         params = yaml.safe_load(f)
     params = params['parameters']
@@ -33,22 +34,28 @@ def main(params_path, running_indexes_path, use_tpus):
         running_indexes = yaml.safe_load(f)
     running_indexes = running_indexes['parameters']['running_indexes']
 
+    if use_tpus_str=='True':
+        use_tpus = True
+    else:
+        use_tpus = False
+
     if use_tpus:
+        print('USING TUPS')
         try:
-            tpu = tf.distribute.cluster_resolver.TPUClusterResolver()  # TPU detection
-            print('Running on TPU ', tpu.cluster_spec().as_dict()['worker'])
-
-            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='')
-            tf.config.experimental_connect_to_cluster(resolver)
-            # This is the TPU initialization code that has to be at the beginning.
-            tf.tpu.experimental.initialize_tpu_system(resolver)
-            print("All devices: ", tf.config.list_logical_devices('TPU'))
-            import tensorflow_hub as hub
-
-            os.environ["TFHUB_MODEL_LOAD_FORMAT"] = "UNCOMPRESSED"
+            cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver()
+            #if tpu_address not in ("", "local"):
+            tf.config.experimental_connect_to_cluster(cluster_resolver)
+            tf.tpu.experimental.initialize_tpu_system(cluster_resolver)
+            strategy = tf.distribute.experimental.TPUStrategy(cluster_resolver)
+            print("Running on TPU ", cluster_resolver.master())
+            print("REPLICAS: ", strategy.num_replicas_in_sync)
+            #strategy = tf.distribute.experimental.TPUStrategy(cluster_resolver)
+            #return cluster_resolver, strategy
         except ValueError:
             raise BaseException(
                 'ERROR: Not connected to a TPU runtime; please see the previous cell in this notebook for instructions!')
+    else:
+        strategy = None
 
     path_root = params['path_root']
     path_tfrecords_new = params['path_tfrecords_new']
@@ -62,7 +69,7 @@ def main(params_path, running_indexes_path, use_tpus):
     paths_list = [os.path.join(path_root, path) for path in paths_list]
 
     for path in paths_list:
-        assert os.path.isdir(path), path + ': Folder does not exist!'
+        assert tf.io.gfile.isdir(path), path + ': Folder does not exist!'
 
     list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, 'true_tau_sorted.csv'))
     # print(list_of_datasets.shape, path_tfrecords_new)
@@ -88,13 +95,14 @@ def main(params_path, running_indexes_path, use_tpus):
         'repetitions': params['repetitions']
     }
 
-    parameters = config.MakeParameters(param_data, param_method)
+    parameters = config.MakeParameters(param_data, param_method, use_tpus=use_tpus, strategy=strategy)
 
     #running_indexes = params['running_indexes']
 
     for i in running_indexes:
         update_experiments('true_tau_sorted', path_root, path_features, i, status='yes')
 
+    print('path',os.path.join(path_root, path_features, 'true_tau_sorted.csv'))
     list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, 'true_tau_sorted.csv'))
 
     for i, sim_id in enumerate(sim_id):
@@ -125,4 +133,4 @@ def main(params_path, running_indexes_path, use_tpus):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1],sys.argv[2], sys.argv[3])
+    main(sys.argv[1], sys.argv[2], sys.argv[3])

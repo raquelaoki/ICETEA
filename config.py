@@ -50,7 +50,7 @@ class MakeParameters:
     parameters: methods parameteres as objects.
   """
 
-    def __init__(self, configs_data, configs_methods):
+    def __init__(self, configs_data, configs_methods, use_tpus=False, strategy=None):
         super(MakeParameters, self).__init__()
 
         #configs_data['is_Image'] = configs_data.get('is_Image', False)
@@ -58,9 +58,9 @@ class MakeParameters:
         self.config_data = _create_configs(configs_data)
 
         self.config_methods = _read_method_configs(
-            _create_configs(configs_methods),
-            #self.config_data[0]['name'],
-            #self.config_data[0].get('setting', None),
+            config_methods=_create_configs(configs_methods),
+            use_tpus=use_tpus,
+            strategy=strategy,
         )
 
 
@@ -85,8 +85,7 @@ def _create_configs(dict_):
     return configs
 
 
-def _read_method_configs(config_methods,
-                         ):
+def _read_method_configs(config_methods, use_tpus=False, strategy=None):
     """Creates list of dictionaries.
 
   Each dict is a set of config parameters for the methods.
@@ -102,7 +101,10 @@ def _read_method_configs(config_methods,
         parameters = config
 
         parameters['estimator'] = estimators.estimator
-        parameters['base_model'] = _base_image_model_construction({'name_base_model': parameters['name_base_model']})
+        parameters['base_model'] = _base_image_model_construction(model_config={'name_base_model':
+                                                                                    parameters['name_base_model']},
+                                                                  use_tpus=use_tpus,
+                                                                  strategy=strategy)
         parameters['metric'] = _metric_function(parameters['name_metric'])
         parameters['prop_score'] = _prop_score_function(parameters['name_prop_score'])
 
@@ -110,7 +112,7 @@ def _read_method_configs(config_methods,
     return parameters_method
 
 
-def _base_image_model_construction(model_config):
+def _base_image_model_construction(model_config, use_tpus=False, strategy=None):
     """Constructs the image base model.
 
   Args:
@@ -122,26 +124,49 @@ def _base_image_model_construction(model_config):
     model_config['weights'] = 'imagenet'
     model_config['input_shape'] = (256, 256, 3)
 
-    if name_base_model == 'inceptionv3':
-        model = image_model_inceptionv3(model_config)
-        initial_learning_rate = 0.001
-    elif name_base_model == 'resnet50':
-        model = image_model_resnet50(model_config)
-        initial_learning_rate = 0.001
-    elif name_base_model == 'image_regression':
-        model = image_model_regression(model_config)
-        initial_learning_rate = 0.01
+    if use_tpus:
+        with strategy.scope():
+            if name_base_model == 'inceptionv3':
+                model = image_model_inceptionv3(model_config)
+                initial_learning_rate = 0.001
+            elif name_base_model == 'resnet50':
+                model = image_model_resnet50(model_config)
+                initial_learning_rate = 0.001
+            elif name_base_model == 'image_regression':
+                model = image_model_regression(model_config)
+                initial_learning_rate = 0.01
+            else:
+                raise NotImplementedError(
+                    'Estimator not supported:{}'.format(name_base_model))
+
+            lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+                initial_learning_rate, decay_steps=30, decay_rate=0.9, staircase=True)
+
+            model.compile(
+                optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
+                loss='mean_squared_error',
+                metrics=['mse', 'mae'])
     else:
-        raise NotImplementedError(
-            'Estimator not supported:{}'.format(name_base_model))
+        if name_base_model == 'inceptionv3':
+            model = image_model_inceptionv3(model_config)
+            initial_learning_rate = 0.001
+        elif name_base_model == 'resnet50':
+            model = image_model_resnet50(model_config)
+            initial_learning_rate = 0.001
+        elif name_base_model == 'image_regression':
+            model = image_model_regression(model_config)
+            initial_learning_rate = 0.01
+        else:
+            raise NotImplementedError(
+                'Estimator not supported:{}'.format(name_base_model))
 
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate, decay_steps=30, decay_rate=0.9, staircase=True)
+        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate, decay_steps=30, decay_rate=0.9, staircase=True)
 
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
-        loss='mean_squared_error',
-        metrics=['mse', 'mae'])
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
+            loss='mean_squared_error',
+            metrics=['mse', 'mae'])
     return model
 
 
