@@ -13,6 +13,7 @@ import data_kaggle as kd
 import icetea_feature_extraction as fe
 import icetea_data_simulation as ds
 import utils
+from tensorflow.python.client import device_lib
 
 
 def update_experiments(filename, path_root, path_features, row, status):
@@ -55,6 +56,7 @@ def main(params_path, running_indexes_path, use_tpus_str):
             raise BaseException(
                 'ERROR: Not connected to a TPU runtime; please see the previous cell in this notebook for instructions!')
     else:
+        print("DEVICES - ", device_lib.list_local_devices())
         strategy = None
 
     path_root = params['path_root']
