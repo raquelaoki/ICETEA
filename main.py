@@ -5,6 +5,7 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.io import gfile
 import sys
+import yaml
 
 import config
 import estimators
@@ -23,14 +24,33 @@ def update_experiments(filename, path_root, path_features, row, status):
     list_of_datasets.to_csv(os.path.join(path_root, path_features, filename + '.csv'))
 
 
-def main(params_path):
+def main(params_path, running_indexes_path, use_tpus):
     with open(params_path) as f:
         params = yaml.safe_load(f)
     params = params['parameters']
 
+    with open(running_indexes_path) as f:
+        running_indexes = yaml.safe_load(f)
+    running_indexes = running_indexes['parameters']['running_indexes']
+
+    if use_tpus:
+        try:
+            tpu = tf.distribute.cluster_resolver.TPUClusterResolver()  # TPU detection
+            print('Running on TPU ', tpu.cluster_spec().as_dict()['worker'])
+
+            resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='')
+            tf.config.experimental_connect_to_cluster(resolver)
+            # This is the TPU initialization code that has to be at the beginning.
+            tf.tpu.experimental.initialize_tpu_system(resolver)
+            print("All devices: ", tf.config.list_logical_devices('TPU'))
+            import tensorflow_hub as hub
+
+            os.environ["TFHUB_MODEL_LOAD_FORMAT"] = "UNCOMPRESSED"
+        except ValueError:
+            raise BaseException(
+                'ERROR: Not connected to a TPU runtime; please see the previous cell in this notebook for instructions!')
+
     path_root = params['path_root']
-    path_images_png = params['path_images_png']
-    path_tfrecords = params['path_tfrecords']
     path_tfrecords_new = params['path_tfrecords_new']
     path_features = params['path_features']
     path_results = params['path_results']
@@ -38,7 +58,7 @@ def main(params_path):
     # Prefix of images after join (images + simulated t and y )
     prefix_trainNew = prefix_output = 'trainNew'
 
-    paths_list = [path_images_png, path_tfrecords, path_tfrecords_new, path_features, path_results]
+    paths_list = [path_tfrecords_new, path_features, path_results]
     paths_list = [os.path.join(path_root, path) for path in paths_list]
 
     for path in paths_list:
@@ -69,6 +89,8 @@ def main(params_path):
     }
 
     parameters = config.MakeParameters(param_data, param_method)
+
+    #running_indexes = params['running_indexes']
 
     for i in running_indexes:
         update_experiments('true_tau_sorted', path_root, path_features, i, status='yes')
@@ -103,4 +125,4 @@ def main(params_path):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1],sys.argv[2], sys.argv[3])
