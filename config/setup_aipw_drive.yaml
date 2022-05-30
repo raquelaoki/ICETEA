@@ -1,5 +1,5 @@
 parameters:
-    epochs: [20]
+    epochs: [2]
     steps: [20]
     repetitions: [1]
     batch_size: [64]
