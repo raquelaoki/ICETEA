@@ -1,0 +1,12 @@
+parameters:
+    epochs: [20]
+    steps: [20]
+    repetitions: [1]
+    batch_size: [64]
+    name_estimator: ['aipw']
+    name_base_model: ['image_regression','resnet50','inceptionv3']
+    output_name: 'aipw_'
+    path_root: 'gs://icetea_kaggle_data/data/'
+    path_tfrecords_new: 'icetea_newdata/'
+    path_features: 'icetea_features/'
+    path_results: 'icetea_kaggle_results/'
