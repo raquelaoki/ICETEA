@@ -1,0 +1,106 @@
+import cv2
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+import tensorflow as tf
+from tensorflow.io import gfile
+import sys
+
+import config
+import estimators
+import data_kaggle as kd
+import icetea_feature_extraction as fe
+import icetea_data_simulation as ds
+import utils
+
+
+def update_experiments(filename, path_root, path_features, row, status):
+    list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, filename + '.csv'))
+    assert list_of_datasets['running'][row] != 'Done', 'SIMULATION ' + row + ' already done!'
+    list_of_datasets['running'][row] = status
+    if 'Unnamed: 0' in list_of_datasets.columns:
+        list_of_datasets.drop('Unnamed: 0', axis=1, inplace=True)
+    list_of_datasets.to_csv(os.path.join(path_root, path_features, filename + '.csv'))
+
+
+def main(params_path):
+    with open(params_path) as f:
+        params = yaml.safe_load(f)
+    params = params['parameters']
+
+    path_root = params['path_root']
+    path_images_png = params['path_images_png']
+    path_tfrecords = params['path_tfrecords']
+    path_tfrecords_new = params['path_tfrecords_new']
+    path_features = params['path_features']
+    path_results = params['path_results']
+
+    # Prefix of images after join (images + simulated t and y )
+    prefix_trainNew = prefix_output = 'trainNew'
+
+    paths_list = [path_images_png, path_tfrecords, path_tfrecords_new, path_features, path_results]
+    paths_list = [os.path.join(path_root, path) for path in paths_list]
+
+    for path in paths_list:
+        assert os.path.isdir(path), path + ': Folder does not exist!'
+
+    list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, 'true_tau_sorted.csv'))
+    # print(list_of_datasets.shape, path_tfrecords_new)
+    print(list_of_datasets[0:10])
+    sim_id = list_of_datasets['sim_id']
+
+    param_data = {
+        'name': ['kagle_retinal'],
+        'path_tfrecords': [os.path.join(path_root, path_tfrecords_new)],  # path_tfrecords
+        'prefix_train': [prefix_trainNew],
+        'image_size': [[256, 256]],
+        'batch_size': params['batch_size'],
+    }
+
+    param_method = {
+        'name_estimator': params['name_estimator'],
+        'name_metric': ['mse'],
+        'name_base_model': params['name_base_model'],
+        'name_prop_score': ['LogisticRegression_NN'],
+        'learn_prop_score': [False],
+        'epochs': params['epochs'],
+        'steps': params['steps'],
+        'repetitions': params['repetitions']
+    }
+
+    parameters = config.MakeParameters(param_data, param_method)
+
+    for i in running_indexes:
+        update_experiments('true_tau_sorted', path_root, path_features, i, status='yes')
+
+    list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, 'true_tau_sorted.csv'))
+
+    for i, sim_id in enumerate(sim_id):
+        if i in running_indexes:
+            print('running ', i)
+            #  Loads dataset with appropried sim_id.
+            data = utils.ImageData(seed=sim_id, param_data=parameters.config_data[0])
+            #  Creates a temporary DataFrame to keep the repetitions results under this dataset;
+            #  Meaning: data is loaded once, and we have several models (defined in parameters.config_methods)
+            #  using this dataset.
+            results_one_dataset = pd.DataFrame()
+            for _config in parameters.config_methods:
+                # utils.repead_experiment: (data, setting) x param_method.repetitions
+                results_one_config = utils.repeat_experiment(data, _config, seed=i)
+                results_one_dataset = pd.concat([results_one_dataset, results_one_config])
+            results_one_dataset['sim_id'] = sim_id
+
+            results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
+            #  It writes (and overwrite) the output after each dataset.
+            with gfile.GFile(
+                    os.path.join(os.path.join(path_root, path_results), params['output_name'] + str(i) + '.csv'),
+                    'w') as out:
+                out.write(results_one_dataset.to_csv(index=False))
+            update_experiments('true_tau_sorted', path_root, path_features, i, status='done')
+
+    print('DONE')
+    return
+
+
+if __name__ == "__main__":
+    main()
