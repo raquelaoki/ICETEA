@@ -124,10 +124,11 @@ def main(params_path, running_indexes_path, use_tpus_str):
 
             results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
             #  It writes (and overwrite) the output after each dataset.
-            with gfile.GFile(
-                    os.path.join(os.path.join(path_root, path_results), params['output_name'] + str(i) + '.csv'),
-                    'w') as out:
-                out.write(results_one_dataset.to_csv(index=False))
+            #with gfile.GFile(
+            #        os.path.join(os.path.join(path_root, path_results), params['output_name'] + str(i) + '.csv'),
+            #        'w') as out:
+            #    out.write(results_one_dataset.to_csv(index=False))
+            results_one_dataset.to_csv(os.path.join(path_root, path_results, params['output_name'] + str(i) + '.csv'))
             update_experiments('true_tau_sorted', path_root, path_features, i, status='done')
 
     print('DONE')

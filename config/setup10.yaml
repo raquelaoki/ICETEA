@@ -1,2 +1,2 @@
 parameters:
-    running_indexes: [ 100,101,102,103,104,105,106,107,108,109 ]
+    running_indexes: [50,51,52,53,54]
