@@ -10,3 +10,5 @@ parameters:
     path_tfrecords_new: 'icetea_newdata/'
     path_features: 'icetea_features/'
     path_results: 'icetea_kaggle_results/'
+    bucket_name: 'icetea_kaggle_data'
+

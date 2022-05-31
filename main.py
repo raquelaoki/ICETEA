@@ -6,6 +6,8 @@ import tensorflow as tf
 from tensorflow.io import gfile
 import sys
 import yaml
+from google.cloud import storage
+
 
 import config
 import estimators
@@ -14,6 +16,25 @@ import icetea_feature_extraction as fe
 import icetea_data_simulation as ds
 import utils
 from tensorflow.python.client import device_lib
+
+def upload_blob(bucket_name, source_file_name, destination_blob_name):
+    """Uploads a file to the bucket."""
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
+    # The path to your file to upload
+    # source_file_name = "local/path/to/file"
+    # The ID of your GCS object
+    # destination_blob_name = "storage-object-name"
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+
+    blob.upload_from_filename(source_file_name)
+
+    print(
+        f"File {source_file_name} uploaded to {destination_blob_name}."
+    )
 
 
 def update_experiments(filename, path_root, path_features, row, status):
@@ -31,9 +52,11 @@ def main(params_path, running_indexes_path, use_tpus_str):
         params = yaml.safe_load(f)
     params = params['parameters']
 
+
     with open(running_indexes_path) as f:
         running_indexes = yaml.safe_load(f)
     running_indexes = running_indexes['parameters']['running_indexes']
+
 
     if use_tpus_str=='True':
         use_tpus = True
@@ -128,7 +151,16 @@ def main(params_path, running_indexes_path, use_tpus_str):
             #        os.path.join(os.path.join(path_root, path_results), params['output_name'] + str(i) + '.csv'),
             #        'w') as out:
             #    out.write(results_one_dataset.to_csv(index=False))
-            results_one_dataset.to_csv(os.path.join(path_root, path_results, params['output_name'] + str(i) + '.csv'))
+            #
+            results_one_dataset.to_csv(params['output_name'] + str(i) + '.csv')
+
+            upload_blob(bucket_name=params['bucket_name'],
+                        source_file_name=params['output_name'] + str(i) + '.csv',
+                        destination_blob_name=os.path.join(path_root, path_results,
+                                                           params['output_name'] + str(i) + '.csv'),
+                        )
+
+
             update_experiments('true_tau_sorted', path_root, path_features, i, status='done')
 
     print('DONE')

@@ -11,3 +11,4 @@ opencv-python==4.5.5.64
 PyYAML==6.0
 fsspec==2022.5.0
 gcsfs==2022.5.0
+google-cloud-storage
