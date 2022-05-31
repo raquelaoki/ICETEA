@@ -143,15 +143,16 @@ def main(params_path, running_indexes_path, use_tpus_str):
                 # utils.repead_experiment: (data, setting) x param_method.repetitions
                 results_one_config = utils.repeat_experiment(data, _config, seed=i)
                 results_one_dataset = pd.concat([results_one_dataset, results_one_config])
-            results_one_dataset['sim_id'] = sim_id
+                results_one_dataset['sim_id'] = sim_id
+                results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
+                results_one_dataset.to_csv(params['output_name'] + str(i) + '.csv')
+                upload_blob(bucket_name=params['bucket_name'],
+                            source_file_name=params['output_name'] + str(i) + '.csv',
+                            destination_blob_name=path_results,
+                            )
 
+            results_one_dataset['sim_id'] = sim_id
             results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
-            #  It writes (and overwrite) the output after each dataset.
-            #with gfile.GFile(
-            #        os.path.join(os.path.join(path_root, path_results), params['output_name'] + str(i) + '.csv'),
-            #        'w') as out:
-            #    out.write(results_one_dataset.to_csv(index=False))
-            #
             results_one_dataset.to_csv(params['output_name'] + str(i) + '.csv')
 
             upload_blob(bucket_name=params['bucket_name'],
