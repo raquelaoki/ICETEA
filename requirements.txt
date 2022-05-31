@@ -1,5 +1,5 @@
 tensorflow
-protobuf
+protobuf==3.19.0
 keras
 matplotlib
 numpy
