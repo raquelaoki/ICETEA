@@ -4,8 +4,8 @@ parameters:
     repetitions: [1]
     batch_size: [64]
     name_estimator: ['aipw']
-    name_base_model: ['resnet50','inceptionv3']
-    output_name: 'aipw_image_'
+    name_base_model: ['resnet50','inceptionv3','image_regression']
+    output_name: 'aipw_dl_'
     path_root: 'gs://icetea_kaggle_data/data/'
     path_tfrecords_new: 'icetea_newdata/'
     path_features: 'icetea_features/'
