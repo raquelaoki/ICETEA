@@ -28,7 +28,7 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
+    blob = bucket.blob(destination_blob_name+source_file_name)
 
     blob.upload_from_filename(source_file_name)
 
@@ -156,11 +156,8 @@ def main(params_path, running_indexes_path, use_tpus_str):
 
             upload_blob(bucket_name=params['bucket_name'],
                         source_file_name=params['output_name'] + str(i) + '.csv',
-                        destination_blob_name=os.path.join(path_root, path_results,
-                                                           params['output_name'] + str(i) + '.csv'),
+                        destination_blob_name=path_results,
                         )
-
-
             update_experiments('true_tau_sorted', path_root, path_features, i, status='done')
 
     print('DONE')
