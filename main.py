@@ -142,9 +142,10 @@ def main(params_path, running_indexes_path, use_tpus_str):
             for _config in parameters.config_methods:
                 # utils.repead_experiment: (data, setting) x param_method.repetitions
                 results_one_config = utils.repeat_experiment(data, _config, seed=i)
+                results_one_config = pd.merge(results_one_config, list_of_datasets, how='left')
                 results_one_dataset = pd.concat([results_one_dataset, results_one_config])
                 results_one_dataset['sim_id'] = sim_id
-                results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
+                #results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
                 results_one_dataset.to_csv(params['output_name'] + str(i) + '.csv')
                 upload_blob(bucket_name=params['bucket_name'],
                             source_file_name=params['output_name'] + str(i) + '.csv',
@@ -152,7 +153,7 @@ def main(params_path, running_indexes_path, use_tpus_str):
                             )
 
             results_one_dataset['sim_id'] = sim_id
-            results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
+            #results_one_dataset = pd.merge(results_one_dataset, list_of_datasets, how='left')
             results_one_dataset.to_csv(params['output_name'] + str(i) + '.csv')
 
             upload_blob(bucket_name=params['bucket_name'],
