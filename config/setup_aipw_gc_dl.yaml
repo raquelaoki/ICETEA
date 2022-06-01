@@ -1,8 +1,8 @@
 parameters:
     epochs: [10]
-    steps: [20]
+    steps: [10]
     repetitions: [1]
-    batch_size: [64]
+    batch_size: [128]
     name_estimator: ['aipw']
     name_base_model: ['resnet50','inceptionv3','image_regression']
     output_name: 'aipw_dl_'
