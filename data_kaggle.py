@@ -36,8 +36,8 @@ IMAGE_SIZE = [256, 256]
 def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extract', tfrecord_size=1024):
     """ Read images -> Write as TFRecord
     Writes two types of TFrecords in paths['write in']:
-    1) train* files: 67% of images
-    2) val* files: 33% of images
+    1) extract* files: 67% of images
+    2) train* files: 33% of images
 
     :param paths: dictionary, keys: meta (.csv file), root, images, write in
     :param tfrecord_size: int, quant. of images group together
@@ -94,9 +94,9 @@ def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extrac
 
     print('head meta_data')
     print(meta_data.head())
-    print('type meta_data[image_name]: ',type(meta_data['image_name'].values[0]))
-    print('type meta_data[target]: ',type(meta_data['target'].values[0]))
-    print('type meta_data[side]: ',type(meta_data['side'].values[0]))
+    print('type meta_data[image_name]: ', type(meta_data['image_name'].values[0]))
+    print('type meta_data[target]: ', type(meta_data['target'].values[0]))
+    print('type meta_data[side]: ', type(meta_data['side'].values[0]))
 
     # 2. Recover the paths to all images
     image_files = os.listdir(os.path.join(paths['root'], paths['images']))
@@ -151,7 +151,7 @@ def get_batched_dataset(filenames, type='TrainFeatureExtractor', train=True, bat
         :param example: file/sample
         :return: batch image, target
         """
-        image_size = IMAGE_SIZE #[256, 256]
+        image_size = IMAGE_SIZE  # [256, 256]
         features = {
             'image/encoded': tf.io.FixedLenFeature([], dtype=tf.string),
             'image/id': tf.io.FixedLenFeature([], dtype=tf.string),
@@ -200,7 +200,7 @@ def get_batched_dataset(filenames, type='TrainFeatureExtractor', train=True, bat
         option_no_order = tf.data.Options()
         option_no_order.experimental_deterministic = False
         dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=AUTOTUNE)
-        #dataset = dataset.with_options(option_no_order)
+        # dataset = dataset.with_options(option_no_order)
         # image_size is new
         if type == 'TrainFeatureExtractor':
             dataset = dataset.map(_decode_img, num_parallel_calls=AUTOTUNE)
