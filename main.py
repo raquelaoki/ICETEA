@@ -81,7 +81,7 @@ flags.DEFINE_bool('data_sim_allow_shift', False, 'Data Sim allow_shift: allows s
 flags.DEFINE_bool('causal_inference', False, 'Run Causal Inference.')
 flags.DEFINE_list('ci_epochs', [10], 'Base-models DNN epochs.')
 flags.DEFINE_list('ci_steps', [20], 'Base-models DNN steps.')
-flags.DEFINE_list('ci_batch_size', [64], 'Base-models DNN batch_size.')
+flags.DEFINE_list('ci_batch_size', 64, 'Base-models DNN batch_size.')
 flags.DEFINE_list('ci_name_estimator', ['aipw'], 'Causal Inference Estimator.')
 flags.DEFINE_list('ci_name_base_model', ['image_regression', 'resnet50', 'inceptionv3'], 'Base Models.')
 flags.DEFINE_list('ci_learn_prop_score', [False], 'Should a Prop Score Model be trained?')
@@ -211,9 +211,10 @@ def main(_):
         param_data['image_size'] = pixels
         param_data['batch_size'] = config_ci.get('batch_size', FLAGS.ci_batch_size)
         param_data['prefix_train'] = config_ci.get('prefix_train', FLAGS.ci_prefix_train)
+        param_data['output_name'] = config_ci.get('output_name', FLAGS.output_name)
 
         param_method = {}
-        param_method = utils.adding_paths_to_config(param_method, config_paths)
+        #param_method = utils.adding_paths_to_config(param_method, config_paths)
         param_method['name_estimator'] = config_ci.get('name_estimator', FLAGS.ci_name_estimator)
         param_method['name_metric'] = config_ci.get('name_metric', FLAGS.ci_metric)
         param_method['name_base_model'] = config_ci.get('name_base_model', FLAGS.ci_name_base_model)
@@ -225,7 +226,7 @@ def main(_):
         hp.consistency_check_causal_methods(param_method)
 
         config_ci = utils.adding_paths_to_config(config_ci, config_paths)
-        config_ci['output_name'] = config_ci.get('output_name', FLAGS.output_name)
+        #config_ci['output_name'] = config_ci.get('output_name', FLAGS.output_name)
         using_gc = config_ci.get('using_gc', FLAGS.using_gc)
         config_ci['bucket_name'] = config_ci.get('bucket_name', FLAGS.bucket_name)
 
@@ -261,7 +262,7 @@ def main(_):
                     #  using this dataset.
                     results_one_dataset = pd.DataFrame()
                     for _config in config_methods:
-                        _config['image_size'] = pixels[0]
+                        _config['image_size'] = config_ci['image_size'][0]
                         results_one_config = utils.repeat_experiment(param_data=param_data,
                                                                      param_method=_config,
                                                                      seed_data=sim_id,
