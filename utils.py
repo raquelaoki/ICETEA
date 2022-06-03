@@ -39,6 +39,12 @@ import helper_parameters as hp
 logger = logging.getLogger(__name__)
 
 
+def adding_paths_to_config(config, config_paths):
+    for key in config_paths:
+        config[key] = config_paths[key]
+    return config
+
+
 def save_results(using_gc, params, results, i):
     if using_gc:
         results.to_csv(params['output_name'] + str(i) + '.csv')

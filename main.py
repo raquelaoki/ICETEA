@@ -134,6 +134,18 @@ def main(_):
     if FLAGS.load_yaml:
         path_config = FLAGS.path_config_folder
         assert tf.io.gfile.isdir(path_config), path_config + ': Folder does not exist!'
+        with open(os.path.join(path_config, 'paths.yaml')) as f:
+            config_paths = yaml.safe_load(f)
+        config_paths = config_paths['parameters']
+    else:
+        config_paths = {}
+    # Defining the important paths.
+    config_paths['path_root'] = config_paths.get('path_root', FLAGS.path_root)
+    config_paths['path_images_png'] = config_paths.get('path_images_png', FLAGS.path_images_png)
+    config_paths['path_tfrecords'] = config_paths.get('path_tfrecords', FLAGS.path_tfrecords)
+    config_paths['path_features'] = config_paths.get('path_features', FLAGS.path_features)
+    config_paths['path_tfrecords_new'] = config_paths.get('path_tfrecords_new', FLAGS.path_features)
+    config_paths['path_results'] = config_paths.get('path_results', FLAGS.path_features)
 
     if FLAGS.feature_extraction:
         if FLAGS.load_yaml:
@@ -142,10 +154,7 @@ def main(_):
             config_fe = config_fe['parameters']
         else:
             config_fe = {}
-        config_fe['path_root'] = config_fe.get('path_root', FLAGS.path_root)
-        config_fe['path_images_png'] = config_fe.get('path_images_png', FLAGS.path_images_png)
-        config_fe['path_tfrecords'] = config_fe.get('path_tfrecords', FLAGS.path_tfrecords)
-        config_fe['path_features'] = config_fe.get('path_features', FLAGS.path_features)
+        config_fe = utils.adding_paths_to_config(config_fe, config_paths)
         config_fe['xfe_proportion_size'] = config_fe.get('xfe_proportion_size', FLAGS.xfe_proportion_size)
         config_fe['metafile'] = config_fe.get('metafile', FLAGS.metafile)
         config_fe['batch_size'] = config_fe.get('batch_size', FLAGS.feat_extract_batch_size)
@@ -169,16 +178,13 @@ def main(_):
             config_ds = config_ds['parameters']
         else:
             config_ds = {}
-        config_ds['path_root'] = config_ds.get('path_root', FLAGS.path_root)
-        config_ds['path_tfrecords'] = config_ds.get('path_tfrecords', FLAGS.path_tfrecords)
-        config_ds['path_features'] = config_ds.get('path_features', FLAGS.path_features)
+        config_ds = utils.adding_paths_to_config(config_ds, config_paths)
         config_ds['b'] = config_ds.get('b', FLAGS.data_sim_b)
         config_ds['knobs'] = config_ds.get('knobs', FLAGS.data_sim_knobs)
         config_ds['beta_range'] = config_ds.get('beta_range', FLAGS.data_sim_beta_range)
         config_ds['alpha_range'] = config_ds.get('alpha_range', FLAGS.data_sim_alpha_range)
         config_ds['gamma_range'] = config_ds.get('gamma_range', FLAGS.data_sim_gamma_range)
         config_ds['allow_shift'] = config_ds.get('allow_shift', FLAGS.data_sim_allow_shift)
-
         config_ds = hp.consistency_check_data_simulation(config_ds)
         ds.data_simulation_wrapper(config_ds)
 
@@ -199,16 +205,15 @@ def main(_):
         use_tpu = config_ci.get('use_tpu', FLAGS.use_tpu)
         adopt_multiworker = config_ci.get('adopt_multiworker', FLAGS.adopt_multiworker)
         param_data = {}
+        param_data = utils.adding_paths_to_config(param_data, config_paths)
         param_data['name'] = config_ci.get('name_data', FLAGS.name_data)
-        path_tfrecords = config_ci.get('path_tfrecords_new', FLAGS.path_tfrecords_new)
-        path_root = config_ci.get('path_root', FLAGS.path_root)
-        param_data['path_tfrecords'] = os.path.join(path_root, path_tfrecords)
         pixels = config_ci.get('image_size', [FLAGS.ci_image_size,  FLAGS.ci_image_size])
         param_data['image_size'] = pixels
         param_data['batch_size'] = config_ci.get('batch_size', FLAGS.ci_batch_size)
         param_data['prefix_train'] = config_ci.get('prefix_train', FLAGS.ci_prefix_train)
 
         param_method = {}
+        param_method = utils.adding_paths_to_config(param_method, config_paths)
         param_method['name_estimator'] = config_ci.get('name_estimator', FLAGS.ci_name_estimator)
         param_method['name_metric'] = config_ci.get('name_metric', FLAGS.ci_metric)
         param_method['name_base_model'] = config_ci.get('name_base_model', FLAGS.ci_name_base_model)
@@ -216,12 +221,11 @@ def main(_):
         param_method['name_prop_score'] = config_ci.get('name_prop_score', FLAGS.ci_name_prop_score)
         param_method['epochs'] = config_ci.get('epochs', FLAGS.ci_epochs)
         param_method['steps'] = config_ci.get('steps', FLAGS.ci_steps)
-        #param_method['image_size'] = pixels[0]
         model_repetitions = config_ci.get('repetitions', FLAGS.ci_model_repetitions)
         hp.consistency_check_causal_methods(param_method)
 
+        config_ci = utils.adding_paths_to_config(config_ci, config_paths)
         config_ci['output_name'] = config_ci.get('output_name', FLAGS.output_name)
-        config_ci['path_results'] = config_ci.get('path_results', FLAGS.path_results)
         using_gc = config_ci.get('using_gc', FLAGS.using_gc)
         config_ci['bucket_name'] = config_ci.get('bucket_name', FLAGS.bucket_name)
 

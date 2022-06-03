@@ -1,0 +1,13 @@
+parameters:
+    epochs: [10]
+    steps: [20]
+    batch_size: [64]
+    name_estimator: ['aipw']
+    name_base_model: ['image_regression','resnet50','inceptionv3']
+    output_name: 'aipw_'
+    use_tpu: False
+    adopt_multiworker: False
+    using_gc: False
+    data_name: 'kagle_retinal'
+    prefix_train: 'trainNew'
+

@@ -1,0 +1,7 @@
+parameters:
+    path_root: 'data'
+    path_images_png: 'icetea_png/train'
+    path_tfrecords: 'icetea_tfr'
+    path_features: 'icetea_features'
+    path_tfrecords_new: 'icetea_newdata/'
+    path_results: 'icetea_kaggle_results/'
