@@ -1,6 +1,5 @@
 parameters:
     xfe_proportion_size: 0.33 #  Proportion of X used for the feature extractor.
-    metafile: 'trainLabels.csv' # Metafile with labels.
     batch_size: 16  #Feature Extractor only.
     input_shape: [ 128, 128 ]  #Feature Extractor only.
     num_classes: 5  #Feature Extractor only.

@@ -2,6 +2,7 @@
 
 """
 import itertools
+import logging
 import math
 import numpy as np
 import os
@@ -11,8 +12,7 @@ import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.io import gfile
 
-# Local imports
-import data_kaggle as kd
+logger = logging.getLogger(__name__)
 
 
 def data_simulation_wrapper(config):
@@ -20,66 +20,74 @@ def data_simulation_wrapper(config):
     features_file = pd.read_csv(config['path_features'] + 'features.csv')
     logger.info('Features - ' + str(features_file.shape[0]) + ' rows and ' + str(features_file.shape[1]) + ' columns.')
 
+    simulations_files = []
     # Generate the simulations - there are three different settings, one for each knob
-    if sum(config['knobs'] == 0):
+    if sum(config['knobs']) == 0:
+        logger.debug('All knobs are false. Using only setting.')
         # All knobs are false -> Fixed knobs (no range explored).
         beta_range = 0.5 if len(config['beta_range']) == 0 else config['beta_range'][0]
         alpha_range = 1 if len(config['alpha_range']) == 0 else config['alpha_range'][0]
         gamma_range = 0.5 if len(config['gamma_range']) == 0 else config['gamma_range'][0]
 
-        ds.generate_simulations(path_root=config['path_features'],
-                                output_name='simulations',
-                                features=features_file,  # pd.DataFrame(),
-                                b=config['b'],
-                                knob_o=False,  # overlap.
-                                knob_h=False,  # heterogeneity.
-                                knob_s=False,  # scale tau.
-                                beta_range=beta_range,
-                                alpha_range=alpha_range,
-                                gamma_range=gamma_range,
-                                allow_shift=config['allow_shift']
-                                )
+        sf = generate_simulations(path_root=config['path_features'],
+                                  output_name='simulations',
+                                  features=features_file,  # pd.DataFrame(),
+                                  b=config['b'],
+                                  knob_o=False,  # overlap.
+                                  knob_h=False,  # heterogeneity.
+                                  knob_s=False,  # scale tau.
+                                  beta_range=beta_range,
+                                  alpha_range=alpha_range,
+                                  gamma_range=gamma_range,
+                                  allow_shift=config['allow_shift']
+                                  )
+        simulations_files.append(sf)
     else:
-        # ds.generate_simulations takes one knob at the time.
+        logger.debug('Running with knobs.')
         if config['knobs'][0]:
-            ds.generate_simulations(path_root=config['path_features'],
-                                    output_name='simulations',
-                                    features=features_file,  # pd.DataFrame(),
-                                    b=config['b'],
-                                    knob_o=True,  # overlap
-                                    knob_h=False,  # heterogeneity
-                                    knob_s=False,
-                                    allow_shift=config['allow_shift']
-                                    )
+            sf = generate_simulations(path_root=config['path_features'],
+                                      output_name='simulations',
+                                      features=features_file,  # pd.DataFrame(),
+                                      b=config['b'],
+                                      knob_o=True,  # overlap
+                                      knob_h=False,  # heterogeneity
+                                      knob_s=False,
+                                      allow_shift=config['allow_shift']
+                                      )
+            simulations_files.append(sf)
         if config['knobs'][1]:
-            ds.generate_simulations(path_root=config['path_features'],
-                                    output_name='simulations',
-                                    features=features_file,  # pd.DataFrame(),
-                                    b=config['b'],
-                                    knob_o=False,  # overlap
-                                    knob_h=True,  # heterogeneity
-                                    knob_s=False,
-                                    allow_shift=config['allow_shift']
-                                    )
-        if config['knobs'][2]:
-            ds.generate_simulations(path_root=config['path_features'],
-                                    output_name='simulations',
-                                    features=features_file,  # pd.DataFrame(),
-                                    b=config['b'],
-                                    knob_o=False,  # overlap
-                                    knob_h=False,  # heterogeneity
-                                    knob_s=True,
-                                    allow_shift=config['allow_shift']
-                                    )
+            sf = generate_simulations(path_root=config['path_features'],
+                                      output_name='simulations',
+                                      features=features_file,  # pd.DataFrame(),
+                                      b=config['b'],
+                                      knob_o=False,  # overlap
+                                      knob_h=True,  # heterogeneity
+                                      knob_s=False,
+                                      allow_shift=config['allow_shift']
+                                      )
+            simulations_files.append(sf)
 
-    run_index = ds.organizing_simulations(path_features=config_sim['path_features'])
+        if config['knobs'][2]:
+            sf = generate_simulations(path_root=config['path_features'],
+                                      output_name='simulations',
+                                      features=features_file,  # pd.DataFrame(),
+                                      b=config['b'],
+                                      knob_o=False,  # overlap
+                                      knob_h=False,  # heterogeneity
+                                      knob_s=True,
+                                      allow_shift=config['allow_shift']
+                                      )
+            simulations_files.append(sf)
+
+    logger.debug('Organizing simulations.')
+    organizing_simulations(path_features=config['path_features'], simulations_files=simulations_files)
     # 2) Join simulations and tfrecords
     path_simulations = os.path.join(config['path_root'], config['path_features'], 'joined_simulations.csv')
-    ds.join_tfrecord_csv(path_simulations=path_simulations,
-                         path_input=os.path.join(config['path_root'], config['path_tfrecords']),
-                         path_output=os.path.join(config['path_root'], config['path_tfrecords_new']),
-                         input_prefix='extract',
-                         output_prefix='trainNew')
+    join_tfrecord_csv(path_simulations=path_simulations,
+                      path_input=os.path.join(config['path_root'], config['path_tfrecords']),
+                      path_output=os.path.join(config['path_root'], config['path_tfrecords_new']),
+                      input_prefix='extract',
+                      output_prefix='trainNew')
 
 
 def generate_simulations(path_root,
@@ -186,10 +194,10 @@ def generate_simulations(path_root,
 
         return mu_1, mu_0
 
-    assert knob_h + knob_s + knob_o == 1, 'Only one knob can be True!'
     shift = False
-
+    # TODO: improve default values
     if knob_o:
+        logger.debug('Knob - Overlap.')
         # Make a range of values for beta
         alpha = [10]
         if len(beta_range) > 0:
@@ -202,6 +210,7 @@ def generate_simulations(path_root,
         name_id = '_ko'
         output_name = output_name + name_id
     elif knob_h:
+        logger.debug('Knob - heterogeneity.')
         # Make a range of values for gamma
         alpha = [10]
         beta = [0.5]
@@ -214,6 +223,7 @@ def generate_simulations(path_root,
         name_id = '_kh'
         output_name = output_name + name_id
     elif knob_s:
+        logger.debug('Knob - Treat Effect Scale.')
         if len(alpha_range) > 0:
             alpha = alpha_range
         else:
@@ -223,10 +233,11 @@ def generate_simulations(path_root,
         name_id = '_ks'
         output_name = output_name + name_id
     else:
+        logger.debug('No knobs.')
         alpha = [1]
         beta = [0.5]
         gamma = [0.5]
-        name_id = ''
+        name_id = '_no'
         if allow_shift:
             shift = True
 
@@ -254,8 +265,10 @@ def generate_simulations(path_root,
             output_[prefix + '-y'] = y
         output = pd.concat([output, output_], axis=1)
 
+    logger.debug('Simulation is done!')
     with gfile.GFile(os.path.join(path_root, output_name + '.csv'), 'w') as out:
         out.write(output.to_csv(index=False))
+    return output_name + '.csv'
 
 
 def join_tfrecord_csv(path_simulations,
@@ -451,7 +464,7 @@ def join_tfrecord_csv(path_simulations,
     print('DONE with JOIN features')
 
 
-def organizing_simulations(path_features):
+def organizing_simulations(path_features, simulations_files=[]):
     """ Organize all simulations in a single file.
 
     One might choose to create several simulation files (one file per knob, or a knob with different parameters).
@@ -463,21 +476,20 @@ def organizing_simulations(path_features):
     """
 
     #  1.Find all files in folder starting with simulations_.
-    simulations = []
-    for item in os.listdir(path_features):
-        if item.startswith('simulations_'):
-            simulations.append(item)
+    if len(simulations_files)==0:
+        simulations_files = []
+        for item in os.listdir(path_features):
+            if item.startswith('simulations_'):
+                simulations_files.append(item)
 
     #  2. Join all files simulations_*.
     join_all_simulations = pd.DataFrame()
-    for file in simulations:
+    for file in simulations_files:
         sim = pd.read_csv(os.path.join(path_features, file))
         if join_all_simulations.empty:
             join_all_simulations = sim
         else:
-            # print(join_all_simulations.shape)
             join_all_simulations = pd.merge(join_all_simulations, sim, how='outer', on='images_id')
-    # print(join_all_simulations.shape)
 
     #  3. Write joined simulations.
     with gfile.GFile(os.path.join(path_features, 'joined_simulations' + '.csv'), 'w') as out:
@@ -517,4 +529,4 @@ def organizing_simulations(path_features):
     tau.drop('index', axis=1, inplace=True)
     with gfile.GFile(os.path.join(path_features, 'true_tau_sorted' + '.csv'), 'w') as out:
         out.write(tau.to_csv(index=False))
-    #return sim_id
+    # return sim_id

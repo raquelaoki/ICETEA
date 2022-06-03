@@ -60,14 +60,13 @@ def write_images_as_tfrecord(paths,
         :return: -
         """
         n_tfrecords = len(image_files_path) // tfrecord_size + int(len(image_files_path) % tfrecord_size != 0)
-        base_name = os.path.join(paths['root'], paths['write_in'])
+        base_name = os.path.join(paths['path_root'], paths['path_tfrecords'])
         for j in range(n_tfrecords):
-            print()
             print('Writing TFRecord - %s: %i of %i...' % (base_name, j, n_tfrecords))
             nper_tfrecord = min(tfrecord_size, len(image_files_path) - j * tfrecord_size)
             with tf.io.TFRecordWriter('%s%s%.2i-%i.tfrec' % (base_name, set_name, j, nper_tfrecord)) as writer:
                 for k in range(nper_tfrecord):
-                    path = os.path.join(paths['root'], paths['images'], image_files_path[tfrecord_size * j + k])
+                    path = os.path.join(paths['path_root'], paths['path_images_png'], image_files_path[tfrecord_size * j + k])
                     img = cv2.imread(path)
                     img = cv2.imencode('.jpg', img, (cv2.IMWRITE_JPEG_QUALITY, 94))[1].tostring()
                     name = image_files_path[tfrecord_size * j + k].split('.')[0]
@@ -92,19 +91,13 @@ def write_images_as_tfrecord(paths,
     prefix_extract = 'extract'
 
     #  1. Loading metadata:
-    meta_data = pd.read_csv(os.path.join(paths['root'], paths['meta']))
+    meta_data = pd.read_csv(os.path.join(paths['path_root'], paths['path_meta']))
     meta_data.rename({'image': 'image_name', 'level': 'target'}, axis=1, inplace=True)
     meta_data['side'] = meta_data.apply(lambda x: x['image_name'].split('_')[1], axis=1)
     meta_data['side'] = meta_data.apply(lambda x: 1 if x['side'] == 'right' else 0, axis=1)  # Right is 1, Left is 0
 
-    print('head meta_data')
-    print(meta_data.head())
-    print('type meta_data[image_name]: ', type(meta_data['image_name'].values[0]))
-    print('type meta_data[target]: ', type(meta_data['target'].values[0]))
-    print('type meta_data[side]: ', type(meta_data['side'].values[0]))
-
     # 2. Recover the paths to all images
-    image_files = os.listdir(os.path.join(paths['root'], paths['images']))
+    image_files = os.listdir(os.path.join(paths['path_root'], paths['path_images_png']))
 
     #  3. Split images between train and extract (fixed seed for reproducibility)
     image_files_extract, image_files_train = train_test_split(image_files,
@@ -240,8 +233,10 @@ def build_datasets_feature_extractor(dataset_config, prefix_train, prefix_extrac
     train_ds: tf.data.Dataset, keys={'image/encoded', image/target'}
     extract_ds: tf.data.Dataset, keys={'image/id', 'image/encoded', image/target'}
   """
-    filenames_train_feat_extractor = tf.io.gfile.glob(dataset_config['path_tfrecords'] + prefix_train + '*.tfrec')
-    filenames_extract_features_from = tf.io.gfile.glob(dataset_config['path_tfrecords'] + prefix_extract + '*.tfrec')
+    path = os.path.join(dataset_config['path_root'], dataset_config['path_tfrecords'])
+    dataset_config['batch_size'] = dataset_config.get('batch_size', 16)
+    filenames_train_feat_extractor = tf.io.gfile.glob(path + prefix_train + '*.tfrec')
+    filenames_extract_features_from = tf.io.gfile.glob(path + prefix_extract + '*.tfrec')
 
     train_ds = get_batched_dataset(filenames_train_feat_extractor, type=type, train=True,
                                    batch_size=dataset_config['batch_size'])

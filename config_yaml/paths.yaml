@@ -4,4 +4,5 @@ parameters:
     path_tfrecords: 'icetea_tfr'
     path_features: 'icetea_features'
     path_tfrecords_new: 'icetea_newdata/'
-    path_results: 'icetea_kaggle_results/'
+    path_results: 'icetea_results/'
+    path_meta: 'trainLabels.csv'

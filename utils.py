@@ -144,7 +144,6 @@ class ImageData:
                     f'image/{seed}-y1': tf.io.FixedLenFeature([1], tf.float32)
                     }
 
-
         filenames = tf.io.gfile.glob(param_data['path_tfrecords'] + param_data['prefix_train'] + '*.tfrec')
         assert len(filenames) > 0, 'No files found! Check path and prefix'
         dataset = tf.data.TFRecordDataset(filenames)

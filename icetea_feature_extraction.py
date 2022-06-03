@@ -17,7 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.io import gfile
 
 # Local imports
-import data_kaggle as kd
+import helper_data as kd
 import icetea_data_simulation as ds
 
 logger = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ def extract_hx(model_config):
     """
 
     #  1. Build tfrecord datasets - important to use type='TrainFeatureExtractor'
-    dataset_train, dataset_extract = kd.build_datasets_feature_extractor(model_config,
+    dataset_train, dataset_extract = hd.build_datasets_feature_extractor(model_config,
                                                                          prefix_extract='extract',
                                                                          prefix_train='train',
                                                                          type='TrainFeatureExtractor')
@@ -168,7 +168,7 @@ def extract_hx(model_config):
     extract = tf.keras.Model(model.inputs, model.layers[-2].output)
 
     #  5. Rebuild the dataset using type 'ExtractFeatures' - it will return batch with IDs (used on join)
-    _, dataset_extract = kd.build_datasets_feature_extractor(model_config,
+    _, dataset_extract = hd.build_datasets_feature_extractor(model_config,
                                                              prefix_extract='extract',
                                                              prefix_train='train',
                                                              type='ExtractFeatures')
