@@ -1,6 +1,9 @@
-import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 import pandas as pd
+import seaborn as sns
+
+#Local
 import helper_data as hd
 
 sns.set(font_scale=1.5)
@@ -43,7 +46,7 @@ def checking_tfrecords(config):
 
 def checking_tfrecords_after_join(config, seed=None):
     if not seed:
-        simulations = pd.read_csv(config_ds['path_features'] + 'joined_simulations.csv')
+        simulations = pd.read_csv(config['path_features'] + 'joined_simulations.csv')
         seeds = simulations.columns[1:]
         seeds = [item.split('-')[0] for item in seeds]
         seed = pd.unique(seeds)[0]
