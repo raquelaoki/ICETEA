@@ -22,6 +22,7 @@ DataSimulation class: assumes one binary treatment, and continuous target.
 
 Experiments class: fits the estimator, return metrics
 """
+import logging
 import math
 import os
 import time
@@ -31,25 +32,48 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 import matplotlib.pyplot as plt
-
 from tensorflow.io import gfile
 
 AUTOTUNE = tf.data.AUTOTUNE
+import helper_parameters as hp
+logger = logging.getLogger(__name__)
 
 
-def repeat_experiment(data, param_method, seed):
-    repetitions = param_method.get('repetitions', 1)
-    for b in range(repetitions):
-        resul, columns = experiments(data=data, seed=seed, param_method=param_method)
-        if b == 0:
-            tab = pd.DataFrame(columns=columns)
-            tab = tab.append(resul, ignore_index=True)
-        else:
-            tab = tab.append(resul, ignore_index=True)
-    return tab
+def save_results(using_gc, params, results, i):
+    if using_gc:
+        results.to_csv(params['output_name'] + str(i) + '.csv')
+        upload_blob(bucket_name=params['bucket_name'],
+                    source_file_name=params['output_name'] + str(i) + '.csv',
+                    destination_blob_name=path_results,
+                    )
+    else:
+        with gfile.GFile(
+                os.path.join(os.path.join(params['path_root'], params['path_results']), params['output_name'] + str(i) + '.csv'),
+                'w') as out:
+            out.write(results.to_csv(index=False))
 
 
-def experiments(data, seed, param_method):
+def repeat_experiment(param_data, param_method,
+                      seed_data, seed_method,
+                      model_repetitions=1, use_tpu=False, strategy=None):
+    table = pd.DataFrame()
+
+    for b in range(model_repetitions):
+        logger.debug('Model Repetition - ' + str(b))
+        results = experiments(param_data=param_data,
+                              seed_data=seed_data,
+                              param_method=param_method,
+                              seed_method=seed_method,
+                              model_repetition_index=b,
+                              use_tpu=use_tpu,
+                              strategy=strategy)
+        table = pd.concat([table, results])
+    return table
+
+
+def experiments(param_data, seed_data,
+                param_method, seed_method,
+                model_repetition_index=1, use_tpu=False, strategy=None):
     """Function to run experiments.
   Args:
     data: DataSimulation obj.
@@ -59,13 +83,16 @@ def experiments(data, seed, param_method):
     Dictionary with simulation results.
     col names
   """
-    # del seed
     start = time.time()
+    logger.debug('Creating data.')
+    data = ImageData(seed=seed_data, param_data=param_data)
+    logger.debug('Creating Objects.')
+    param_method = hp.create_methods_obj(config=param_method, use_tpu=use_tpu, strategy=strategy)
     estimator = param_method['estimator']
+    logger.debug('Fitting Estimator.')
     tau_, mse, bias, var_tau = estimator(data=data,
                                          param_method=param_method,
-                                         type=param_method['name_estimator'],
-                                         seed=seed)
+                                         seed=seed_method)
     tab = {
         't_est': tau_,
         'mse0': mse[0],
@@ -74,14 +101,15 @@ def experiments(data, seed, param_method):
         'bias1': bias[1],
         'variance': var_tau,
         'name': data.name,
-        'seed': seed,
+        'seed': seed_method,
         'method_estimator': param_method['name_estimator'],
         'method_base_model': param_method['name_base_model'],
         'method_metric': param_method['name_metric'],
+        'model_repetition': model_repetition_index,
         'time': time.time() - start,
     }
+    return pd.DataFrame(tab, index=[0])
 
-    return tab, list(tab.keys())
 
 
 class ImageData:
@@ -104,13 +132,13 @@ class ImageData:
         batch_size = param_data['batch_size']
         features = {'image/encoded': tf.io.FixedLenFeature([], dtype=tf.string),
                     'image/id': tf.io.FixedLenFeature([], dtype=tf.string),
-                    f'image/{seed}-pi': tf.io.FixedLenFeature([1], tf.float32),
+                    f'image/{seed}-t': tf.io.FixedLenFeature([1], tf.float32),
                     f'image/{seed}-y': tf.io.FixedLenFeature([1], tf.float32),
-                    f'image/{seed}-mu0': tf.io.FixedLenFeature([1], tf.float32),
-                    f'image/{seed}-mu1': tf.io.FixedLenFeature([1], tf.float32)
+                    f'image/{seed}-y0': tf.io.FixedLenFeature([1], tf.float32),
+                    f'image/{seed}-y1': tf.io.FixedLenFeature([1], tf.float32)
                     }
 
-        # path = param_data['data_path']
+
         filenames = tf.io.gfile.glob(param_data['path_tfrecords'] + param_data['prefix_train'] + '*.tfrec')
         assert len(filenames) > 0, 'No files found! Check path and prefix'
         dataset = tf.data.TFRecordDataset(filenames)
@@ -181,7 +209,7 @@ def _filter_cols_ps(dataset, seed):
   Returns:
     dataset: tf.data.Dataset with two columns (X,T).
   """
-    t_name = f'image/{seed}-pi'
+    t_name = f'image/{seed}-t'
     return dataset['image/encoded'], dataset[t_name]
 
 
@@ -210,7 +238,7 @@ def _filter_treatment(dataset, seed):
     dataset: tf.data.Dataset
   """
     t = False
-    if dataset[f'image/{seed}-pi'] == 1:
+    if dataset[f'image/{seed}-t'] == 1:
         t = True
     dataset['t'] = t
     return dataset

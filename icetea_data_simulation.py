@@ -15,6 +15,73 @@ from tensorflow.io import gfile
 import data_kaggle as kd
 
 
+def data_simulation_wrapper(config):
+    # 1) Creates the simulations - first reads the saved csv file with the features extracted.
+    features_file = pd.read_csv(config['path_features'] + 'features.csv')
+    logger.info('Features - ' + str(features_file.shape[0]) + ' rows and ' + str(features_file.shape[1]) + ' columns.')
+
+    # Generate the simulations - there are three different settings, one for each knob
+    if sum(config['knobs'] == 0):
+        # All knobs are false -> Fixed knobs (no range explored).
+        beta_range = 0.5 if len(config['beta_range']) == 0 else config['beta_range'][0]
+        alpha_range = 1 if len(config['alpha_range']) == 0 else config['alpha_range'][0]
+        gamma_range = 0.5 if len(config['gamma_range']) == 0 else config['gamma_range'][0]
+
+        ds.generate_simulations(path_root=config['path_features'],
+                                output_name='simulations',
+                                features=features_file,  # pd.DataFrame(),
+                                b=config['b'],
+                                knob_o=False,  # overlap.
+                                knob_h=False,  # heterogeneity.
+                                knob_s=False,  # scale tau.
+                                beta_range=beta_range,
+                                alpha_range=alpha_range,
+                                gamma_range=gamma_range,
+                                allow_shift=config['allow_shift']
+                                )
+    else:
+        # ds.generate_simulations takes one knob at the time.
+        if config['knobs'][0]:
+            ds.generate_simulations(path_root=config['path_features'],
+                                    output_name='simulations',
+                                    features=features_file,  # pd.DataFrame(),
+                                    b=config['b'],
+                                    knob_o=True,  # overlap
+                                    knob_h=False,  # heterogeneity
+                                    knob_s=False,
+                                    allow_shift=config['allow_shift']
+                                    )
+        if config['knobs'][1]:
+            ds.generate_simulations(path_root=config['path_features'],
+                                    output_name='simulations',
+                                    features=features_file,  # pd.DataFrame(),
+                                    b=config['b'],
+                                    knob_o=False,  # overlap
+                                    knob_h=True,  # heterogeneity
+                                    knob_s=False,
+                                    allow_shift=config['allow_shift']
+                                    )
+        if config['knobs'][2]:
+            ds.generate_simulations(path_root=config['path_features'],
+                                    output_name='simulations',
+                                    features=features_file,  # pd.DataFrame(),
+                                    b=config['b'],
+                                    knob_o=False,  # overlap
+                                    knob_h=False,  # heterogeneity
+                                    knob_s=True,
+                                    allow_shift=config['allow_shift']
+                                    )
+
+    run_index = ds.organizing_simulations(path_features=config_sim['path_features'])
+    # 2) Join simulations and tfrecords
+    path_simulations = os.path.join(config['path_root'], config['path_features'], 'joined_simulations.csv')
+    ds.join_tfrecord_csv(path_simulations=path_simulations,
+                         path_input=os.path.join(config['path_root'], config['path_tfrecords']),
+                         path_output=os.path.join(config['path_root'], config['path_tfrecords_new']),
+                         input_prefix='extract',
+                         output_prefix='trainNew')
+
+
 def generate_simulations(path_root,
                          output_name='simulations',
                          features=pd.DataFrame(),
@@ -25,7 +92,8 @@ def generate_simulations(path_root,
                          knob_s=False,  # causal effect scale
                          beta_range=[],
                          alpha_range=[],
-                         gamma_range=[]
+                         gamma_range=[],
+                         allow_shift=False
                          ):
     """Generate the p(x) and mu(x,y) from h(x).
 
@@ -42,6 +110,7 @@ def generate_simulations(path_root,
     beta_range: list with values to be explored if knob_o True (defoult values also provided)
     alpha_range: list with values to be explored if knob_h True (defoult values also provided)
     gamma_range: list with values to be explored if knob_s True (defoult values also provided)
+    allow_shift: bool, allows shift so tau = 1
     """
 
     def _generation_weights(n_cols=2048, alpha=10):
@@ -51,12 +120,12 @@ def generate_simulations(path_root,
         :return: matrices with weights.
         """
         phi = np.random.uniform(-1, 1, n_cols)
-        scale = np.random.uniform(0, alpha,1)
+        scale = np.random.uniform(0, alpha, 1)
         eta_1 = np.random.uniform(-1, 1 * scale, n_cols)
-        eta_0 = np.random.uniform(-1, 1 , n_cols)
+        eta_0 = np.random.uniform(-1, 1, n_cols)
         return phi, eta_1, eta_0
 
-    def _pi_x_function(features, gam, beta=0.5):
+    def _t_function(features, gam, beta=0.5):
         """ Calcualte the treatment assigment.
         :param features: input features, extracted on phase 1 of the framework;
         :param gam: weights
@@ -68,55 +137,57 @@ def generate_simulations(path_root,
             return 1 / (1 + math.exp(-x))
 
         assert 0 <= beta <= 1, 'Beta out of range [0,1]'
-        pi = np.matmul(features, gam).reshape(-1, 1)
+        # Component extracted from features.
+        Z = np.matmul(features, gam).reshape(-1, 1)
         scaler = MinMaxScaler((-2, 2))
-        pi = scaler.fit_transform(pi)
-        pi = pi.ravel()
-        pi = [sigmoid(item) for item in pi]
-        zeros = [1 if item > 0.5 else 0 for item in pi]
-        pi = np.multiply(beta, pi)
-        zeros = np.multiply(1 - beta, zeros)
-        pi = pi + zeros
-        t = [np.random.binomial(1, item) for item in pi]
-        return t
+        Z = scaler.fit_transform(Z).ravel()
+        Z = [sigmoid(item) for item in Z]
+        # Component from knob.
+        ones = [1 if item > 0.5 else 0 for item in Z]
+        pt = np.multiply(beta, Z)
+        ones = np.multiply(1 - beta, ones)
+        pt = pt + ones
+        # Treatment assignment.
+        T = [np.random.binomial(1, item) for item in pt]
+        return T
 
-    def _mu_x_function(features, eta1, eta0, gamma=0.5, scale=False):
+    def _y_function(features, eta_1, eta_0, gamma=0.5, shift=False):
         """ Calcualte the outcome.
         :param features: input features, extracted on phase 1 of the framework;
-        :param eta0: weights if untreated
-        :param eta1: weights if treated
+        :param eta_0: weights if untreated
+        :param eta_1: weights if treated
         :param gamma: knob_s values (treat effect)
+        :param scale: bool, it sets tau to be 1.
         :return:
         """
-        mu1 = np.array(np.matmul(features, eta1))
-        mu0 = np.array(np.matmul(features, eta0))
-        full = np.array(np.concatenate([mu1, mu0]))
+        # Component from features.
+        mu_1 = np.array(np.matmul(features, eta_1))
+        mu_0 = np.array(np.matmul(features, eta_0))
+        mu = np.array(np.concatenate([mu_1, mu_0]))
         scaler = MinMaxScaler()
-        scaler.fit(full.reshape(-1, 1))
-        mu1 = scaler.transform(mu1.reshape(-1, 1))
-        mu0 = scaler.transform(mu0.reshape(-1, 1))
+        scaler.fit(mu.reshape(-1, 1))
+        mu_1 = scaler.transform(mu_1.reshape(-1, 1))
+        mu_0 = scaler.transform(mu_0.reshape(-1, 1))
+        mu_1 = np.multiply(gamma, mu_1)
+        mu_0 = np.multiply(gamma, mu_0)
 
+        # Component from knobs.
         ones = np.ones(features.shape)
-        mu1_ones = scaler.transform(np.array(np.matmul(ones, eta1)).reshape(-1, 1))
-        mu0_ones = scaler.transform(np.array(np.matmul(ones, eta0)).reshape(-1, 1))
+        mu_1_ones = scaler.transform(np.array(np.matmul(ones, eta_1)).reshape(-1, 1))
+        mu_0_ones = scaler.transform(np.array(np.matmul(ones, eta_0)).reshape(-1, 1))
+        mu_1_ones = np.multiply(1 - gamma, mu_1_ones)
+        mu_0_ones = np.multiply(1 - gamma, mu_0_ones)
+        mu_1, mu_0 = mu_1 + mu_1_ones, mu_0 + mu_0_ones
 
-        mu1 = np.multiply(gamma, mu1)
-        mu0 = np.multiply(gamma, mu0)
+        if shift:
+            # adding a constant so tau is always 1
+            dif = 1 - (mu_1.mean() - mu_0.mean())
+            mu_1 = mu_1 + dif
 
-
-        mu1_ones = np.multiply(1 - gamma, mu1_ones)
-        mu0_ones = np.multiply(1 - gamma, mu0_ones)
-        mu1, mu0 = mu1 + mu1_ones, mu0 + mu0_ones
-
-        if scale:
-            #adding a constant so tau is always 1
-            dif = 1 - (mu1.mean()-mu0.mean())
-            mu1 = mu1+dif
-
-        return mu1, mu0
+        return mu_1, mu_0
 
     assert knob_h + knob_s + knob_o == 1, 'Only one knob can be True!'
-    scale=False
+    shift = False
 
     if knob_o:
         # Make a range of values for beta
@@ -124,16 +195,18 @@ def generate_simulations(path_root,
         if len(beta_range) > 0:
             beta = beta_range
         else:
-            beta = [0,  0.5,  1]
+            beta = [0, 0.5, 1]
         gamma = [0.5]
-        scale=True
+        if allow_shift:
+            shift = True
         name_id = '_ko'
         output_name = output_name + name_id
     elif knob_h:
         # Make a range of values for gamma
         alpha = [10]
         beta = [0.5]
-        scale = True
+        if allow_shift:
+            shift = True
         if len(gamma_range) > 0:
             gamma = gamma_range
         else:
@@ -150,7 +223,12 @@ def generate_simulations(path_root,
         name_id = '_ks'
         output_name = output_name + name_id
     else:
-        raise "At least one knob must be on!"
+        alpha = [1]
+        beta = [0.5]
+        gamma = [0.5]
+        name_id = ''
+        if allow_shift:
+            shift = True
 
     if features.empty:
         features = pd.read_csv(os.path.join(path_root, features_name))
@@ -158,35 +236,34 @@ def generate_simulations(path_root,
     output = pd.DataFrame()
     output['images_id'] = features['images_id']
     features = features.drop(['images_id'], axis=1)
+
     for i in range(b):
         output_ = pd.DataFrame()
         for j, (alpha_, beta_, gamma_) in enumerate(list(itertools.product(alpha, beta, gamma))):
             np.random.seed(i * 100 + j)
-            #print(name_id, alpha_, beta_, gamma)
             phi, eta1, eta0 = _generation_weights(features.shape[1], alpha_)
-            pi = _pi_x_function(features.values, phi, beta_)
-            mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_, scale=scale)
-            y = [mu0[i][0] if p == 0 else mu1[i][0] for i, p in enumerate(pi)]
+            t = _t_function(features.values, phi, beta_)
+            y_treat, y_control = _y_function(features.values, eta1, eta0, gamma_, shift=shift)
+            y = [y_control[i][0] if p == 0 else y_treat[i][0] for i, p in enumerate(t)]
             knob = str(alpha_) + '_' + str(beta_) + '_' + str(gamma_)
             prefix = 'sim' + name_id + str(j) + '_b' + str(i) + '_' + knob
 
-            output_[prefix + '-pi'] = pi
-            output_[prefix + '-mu1'] = mu1
-            output_[prefix + '-mu0'] = mu0
+            output_[prefix + '-t'] = t
+            output_[prefix + '-y1'] = y_treat
+            output_[prefix + '-y0'] = y_control
             output_[prefix + '-y'] = y
         output = pd.concat([output, output_], axis=1)
 
     with gfile.GFile(os.path.join(path_root, output_name + '.csv'), 'w') as out:
         out.write(output.to_csv(index=False))
 
-    return output
-
 
 def join_tfrecord_csv(path_simulations,
                       path_input,
                       path_output,
                       input_prefix,
-                      output_prefix='train_features'):
+                      output_prefix='trainNew',
+                      ):
     """Join TFRecord files and a csv file with a common id.
     Args:
     path_simulations: path for csv file
@@ -207,7 +284,7 @@ def join_tfrecord_csv(path_simulations,
                 fileout = filename.replace(input_prefix, output_prefix)
                 tfrecord_output_filenames.append(os.path.join(path_output, fileout))
 
-        #print('_make_filepaths',tfrecord_output_filenames)
+        # print('_make_filepaths',tfrecord_output_filenames)
         return tfrecord_input_filenames, tfrecord_output_filenames
 
     def _add_labels_to_tfrecords(path_input, path_output, label_records, overwrite=True):
@@ -292,7 +369,7 @@ def join_tfrecord_csv(path_simulations,
                 print("MISSING", first_name)
                 continue
             dict_labels[first_name] = label_records[first_name]
-            #print('found',first_name)
+            # print('found',first_name)
         return dict_labels
 
     def _convert_tensor_dicts_to_examples(dict_id_to_encoded_images, dict_label_tfrecords):
@@ -339,7 +416,7 @@ def join_tfrecord_csv(path_simulations,
 
     # Loading simulations.
     simulations = pd.read_csv(path_simulations)
-    print('simulations', len(pd.unique(simulations['images_id'])),simulations.shape)
+    print('simulations', len(pd.unique(simulations['images_id'])), simulations.shape)
     if path_input == path_output:
         raise ValueError('Input and Output path should be different!')
 
@@ -351,15 +428,15 @@ def join_tfrecord_csv(path_simulations,
                                                                           path_output=path_output,
                                                                           input_prefix=input_prefix,
                                                                           output_prefix=output_prefix)
-    print('tfrecord_input_filenames',tfrecord_input_filenames)
+    print('tfrecord_input_filenames', tfrecord_input_filenames)
 
     # Generate arguments for converting each shard.
-    #add_labels_to_tfrecords_args1 = []
-    #add_labels_to_tfrecords_args2 = []
+    # add_labels_to_tfrecords_args1 = []
+    # add_labels_to_tfrecords_args2 = []
 
     failed_paths_with_none = []
     for input_path, output_path in zip(tfrecord_input_filenames,
-                                          tfrecord_output_filenames):
+                                       tfrecord_output_filenames):
         failed = _add_labels_to_tfrecords(path_input=input_path,
                                           path_output=output_path,
                                           label_records=label_records)
@@ -392,16 +469,15 @@ def organizing_simulations(path_features):
             simulations.append(item)
 
     #  2. Join all files simulations_*.
-    print('Joining simulations:')
     join_all_simulations = pd.DataFrame()
     for file in simulations:
         sim = pd.read_csv(os.path.join(path_features, file))
         if join_all_simulations.empty:
             join_all_simulations = sim
         else:
-            #print(join_all_simulations.shape)
+            # print(join_all_simulations.shape)
             join_all_simulations = pd.merge(join_all_simulations, sim, how='outer', on='images_id')
-    #print(join_all_simulations.shape)
+    # print(join_all_simulations.shape)
 
     #  3. Write joined simulations.
     with gfile.GFile(os.path.join(path_features, 'joined_simulations' + '.csv'), 'w') as out:
@@ -417,9 +493,9 @@ def organizing_simulations(path_features):
     tau = pd.DataFrame(
         columns={'sim_id', 'tau', 'setting_id', 'knob', 'setting', 'repetition', 'alpha', 'beta', 'gamma'})
     for item in sim_id:
-        mu1 = join_all_simulations[[item + '-mu1']].values
-        mu0 = join_all_simulations[[item + '-mu0']].values
-        ite = mu1 - mu0
+        y1 = join_all_simulations[[item + '-y1']].values
+        y0 = join_all_simulations[[item + '-y0']].values
+        ite = y1 - y0
         items = item.split('_')
 
         tau_ = {'sim_id': item,
@@ -436,4 +512,9 @@ def organizing_simulations(path_features):
     with gfile.GFile(os.path.join(path_features, 'true_tau' + '.csv'), 'w') as out:
         out.write(tau.to_csv(index=False))
 
-    return sim_id
+    tau.sort_values('repetition', inplace=True)
+    tau.reset_index(inplace=True)
+    tau.drop('index', axis=1, inplace=True)
+    with gfile.GFile(os.path.join(path_features, 'true_tau_sorted' + '.csv'), 'w') as out:
+        out.write(tau.to_csv(index=False))
+    #return sim_id

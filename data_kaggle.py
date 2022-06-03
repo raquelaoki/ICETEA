@@ -33,7 +33,9 @@ AUTOTUNE = tf.data.AUTOTUNE
 IMAGE_SIZE = [256, 256]
 
 
-def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extract', tfrecord_size=1024):
+def write_images_as_tfrecord(paths,
+                             tfrecord_size=1024,
+                             xfe_proportion_size=0.33):
     """ Read images -> Write as TFRecord
     Writes two types of TFrecords in paths['write in']:
     1) extract* files: 67% of images
@@ -41,8 +43,7 @@ def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extrac
 
     :param paths: dictionary, keys: meta (.csv file), root, images, write in
     :param tfrecord_size: int, quant. of images group together
-    :param prefix_train: str
-    :param prefix_extract: str
+    :param xfe_proportion_size: float, value between 0.1 and 0.9
     :return: None
     """
 
@@ -86,6 +87,10 @@ def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extrac
         example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
         return example_proto.SerializeToString()
 
+    # 0.
+    prefix_train = 'train'
+    prefix_extract = 'extract'
+
     #  1. Loading metadata:
     meta_data = pd.read_csv(os.path.join(paths['root'], paths['meta']))
     meta_data.rename({'image': 'image_name', 'level': 'target'}, axis=1, inplace=True)
@@ -103,7 +108,7 @@ def write_images_as_tfrecord(paths, prefix_train='train', prefix_extract='extrac
 
     #  3. Split images between train and extract (fixed seed for reproducibility)
     image_files_extract, image_files_train = train_test_split(image_files,
-                                                              test_size=0.33,
+                                                              test_size=xfe_proportion_size,
                                                               random_state=0)
     #  4. Write the tfrecord files with the appropriate prefix.
     _writer_loop(

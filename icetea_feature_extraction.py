@@ -4,7 +4,10 @@ Reference:
 github.com/Google-Health/genomics-research/blob/main/ml-based-vcdr/learning/model_utils.py
 """
 
+import cv2
+import logging
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -15,7 +18,36 @@ from tensorflow.io import gfile
 
 # Local imports
 import data_kaggle as kd
+import icetea_data_simulation as ds
 
+logger = logging.getLogger(__name__)
+
+
+def feature_extrator_wrapper(config, prefix_train = 'train',prefix_extract = 'extract',prefix_trainNew='trainNew'):
+
+    hp._consistency_check_feature_extractor(config)
+    prefix_trainNew = prefix_output = prefix_trainNew
+
+    paths = {
+        'images': config['path_images_png'],  # folder
+        'meta': config['meta'],  # file
+        'write_in': config['path_tfrecords'],  # folder
+        'root': config['path_root'],
+    }
+    # 1. From .PNG to TFRecord
+    # Kaggle datasets contain the individual images and a csv file with targets.
+    # This first section will combine the images with the csv and save as TFRecord.
+    logger.info('1. Convert PNG to RFRecord.')
+    kd.write_images_as_tfrecord(paths=paths,
+                                xfe_proportion_size=config['xfe_proportion_size']
+                                )
+
+    # 2)Extracting features: it creates a new csv file called features.csv.
+    logger.info('2. Train Feature Extractor.')
+    config['path_tfrecords'] = os.path.join(config['path_root'], config['path_tfrecords'])
+    config['path_features'] = os.path.join(config['path_root'], config['path_features'])
+
+    model = fe.extract_hx(model_config)
 
 
 def compile_model(model_config):
@@ -163,32 +195,32 @@ def _extraction(data, path, model):
         stateful_metrics=None,
         unit_name='step')
 
-    #features = []
+    # features = []
     image_id = []
     features = pd.DataFrame()
 
     for i, (batch_images, batch_labels, batch_id) in enumerate(data):
         batch_predict = model.predict_on_batch(batch_images)
-        #features.append(batch_predict)
-        #print('_extraction',batch_predict.shape,batch_predict[0:3,0:3])
-        features = pd.concat([features,pd.DataFrame(batch_predict)], axis=0)
+        # features.append(batch_predict)
+        # print('_extraction',batch_predict.shape,batch_predict[0:3,0:3])
+        features = pd.concat([features, pd.DataFrame(batch_predict)], axis=0)
         ##print('fetures', features.tail())
         image_id.append(batch_id)
         progbar.add(1)
-        #if i > 10:
+        # if i > 10:
         #    break
 
-    #features = np.array(features)
-    #s = features.shape
-    #print(
+    # features = np.array(features)
+    # s = features.shape
+    # print(
     #    '\nshapes pd ', featuresnew.shape
-    #)
-    #print('\nshapes ', s, s[0].shape)
-    #features = features.reshape(s[0] * s[1], s[2])
+    # )
+    # print('\nshapes ', s, s[0].shape)
+    # features = features.reshape(s[0] * s[1], s[2])
 
     columns = [f'f{i}' for i in range(features.shape[1])]
-    #features = pd.DataFrame(data=features,
-     #                       columns=columns)
+    # features = pd.DataFrame(data=features,
+    #                       columns=columns)
     features.columns = columns
     image_id = np.concatenate(image_id).ravel()
     image_id = [item.decode('utf-8') for item in image_id]
@@ -197,4 +229,3 @@ def _extraction(data, path, model):
     with gfile.GFile(path + '/features.csv', 'w') as table_names:
         table_names.write(features.to_csv(index=False))
     return features
-
