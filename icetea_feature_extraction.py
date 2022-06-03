@@ -17,7 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.io import gfile
 
 # Local imports
-import helper_data as kd
+import helper_data as hd
 import icetea_data_simulation as ds
 
 logger = logging.getLogger(__name__)
