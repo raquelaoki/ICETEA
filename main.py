@@ -22,6 +22,8 @@ Options:
 """
 from absl import app
 from absl import flags
+import apache_beam as beam
+from apache_beam.options import pipeline_options
 import cv2
 from google.cloud import storage
 import logging
@@ -223,7 +225,22 @@ def main(_):
 
         if FLAGS.use_beam:
             running_indexes = list(range(list_of_datasets.shape[0]))
-            # TODO
+            beam_options = pipeline_options.PipelineOptions()
+            print(param_data, param_method)
+            # TODO: debug
+            with beam.Pipeline(options=beam_options) as pipe:
+                _ = (
+                        pipe
+                        | 'Create Data' >> beam.Create(enumerate(pipe_input))
+                        | 'Run Methods' >> beam.FlatMap(beam_utils.organize_param_methods,
+                                                        param_method)
+                        | 'Shuffle 1' >> beam.Reshuffle()
+                        | beam.Map(beam_utils.methods)
+                        | 'Full data' >> beam.Map(beam_utils.convert_dict_to_csv_record)
+                        | 'Shuffle 2' >> beam.Reshuffle()
+                        | 'data save' >>
+                        beam.io.WriteToText(FLAGS.path_output + 'experiments_data')
+                )
         else:
             for i, sim_id in enumerate(list_of_datasets['sim_id']):
                 if i in running_indexes:
