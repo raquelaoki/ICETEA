@@ -1,16 +1,37 @@
+# coding=utf-8
+# Copyright 2022 The Google Research Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import seaborn as sns
 
-#Local
+# Local imports.
 import helper_data as hd
 import utils
 
 sns.set(font_scale=1.5)
 sns.set_style("whitegrid")
 
+
 def exploring_simulated_tau(config_sim):
+    """ Create plot to explore simulated data.
+
+    :param config_sim: dictionary
+    :return: plot
+    """
     tau = pd.read_csv(config_sim['path_features'] + 'true_tau.csv')
 
     knob_ks = tau[tau['knob'] == 'ks']
@@ -36,6 +57,11 @@ def exploring_simulated_tau(config_sim):
 
 
 def checking_tfrecords(config):
+    """ Checking if files exist.
+
+    :param config: dictionary.
+    :return: plot.
+    """
     dataset_train, dataset_val = hd.build_datasets_feature_extractor(dataset_config=config,
                                                                      prefix_train='train',
                                                                      prefix_extract='extractor',
@@ -46,6 +72,12 @@ def checking_tfrecords(config):
 
 
 def checking_tfrecords_after_join(config, seed=None):
+    """ Checking tfrecords images.
+
+    :param config: dictionary.
+    :param seed: dataset seed.
+    :return: plot.
+    """
     if not seed:
         simulations = pd.read_csv(config['path_features'] + 'joined_simulations.csv')
         seeds = simulations.columns[1:]
@@ -61,3 +93,5 @@ def checking_tfrecords_after_join(config, seed=None):
     }
     data = utils.ImageData(seed, param_data)
     data.make_plot()
+
+

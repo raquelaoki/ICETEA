@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# """config!
+# """all_estimators!
 #
-# config files creation of objects, and organization
+# It hadnles the causal inference estimators.
 #
 # """
 
@@ -34,17 +34,16 @@ logger = logging.getLogger(__name__)
 def estimator_aipw(data, param_method, seed=0):
     """Estimate treatment effect using AIPW.
 
-      Args:
-        data: DataSimulation Class
-        param_method: dict with method's parameters
-        seed: model seed
-      Returns:
-        t_estimated: estimated treatment effect using the oaxaca-blinder method
-        metric: list, metric on control and treated groups
-        bias: list, bias on control and treated group
-        var: float, estimator variance.
+    :param data: DataSimulation Class.
+    :param param_method: dict with method's parameters.
+    :param seed: model seed.
 
-      """
+    :return:
+    t_estimated: estimated treatment effect using the oaxaca-blinder method,
+    metric: list [,], metric on control and treated groups,
+    bias: list [,], bias on control and treated group,
+    var: float, estimator variance.
+    """
     # Fix numpy seed for reproducibility
     np.random.seed(seed)
     logger.debug('Running AIPW.')
@@ -73,7 +72,6 @@ def estimator_aipw(data, param_method, seed=0):
 
     bias = [e_control, e_treated]
 
-    # Metrics.
     metric = [mse_control, mse_treated]
 
     return tau_estimated, metric, bias, var
@@ -82,16 +80,14 @@ def estimator_aipw(data, param_method, seed=0):
 def estimator_kob(data, param_method, seed=0):
     """Estimate treatment effect using KOB.
 
-      Args:
-        data: DataSimulation Class
-        param_method: dict with method's parameters
-        seed: model seed
-      Returns:
-        t_estimated: estimated treatment effect using the oaxaca-blinder method
-        metric: list, metric on control and treated groups
-        bias: list, bias on control and treated group
-        var: float, estimator variance.
+    :param data: DataSimulation Class.
+    :param param_method: dict with method's parameters.
+    :param seed: model seed.
 
+    :return: t_estimated: estimated treatment effect using the oaxaca-blinder method.
+     metric: list [,], metric on control and treated groups.
+     bias: list [,], bias on control and treated group.
+     var: float, estimator variance.
       """
     # Fix numpy seed for reproducibility
     np.random.seed(seed)
@@ -122,7 +118,6 @@ def estimator_kob(data, param_method, seed=0):
 
     bias = [e_control, e_treated]
 
-    # Metrics.
     metric = [mse_control, mse_treated]
 
     return tau_estimated, metric, bias, var
@@ -160,17 +155,16 @@ def estimator_template(data, param_method, seed=0):
 def _fit_base_models(model, data, data_all, param_method):
     """Predicts the outcome on the full data.
 
-  Args:
-    data: tf.data.Dataset (control or treated).
-    model: fitted model.
-    dataset_all: tf.data.Dataset (all, for prediction).
-  Returns:
-    y_pred: predictions on data_all
-    mse: array with mse on the control and treated group
-    bias: array with bias on the control and treated group
-    t: treatment assigment on data_all
-    y_obs: observed outcome on data_all
-  """
+    :param data: tf.data.Dataset (control or treated).
+    :param model: tf.keras.Model.
+    :param dataset_all: tf.data.Dataset (all, for prediction).
+
+    :return: y_pred: [], predictions on data_all.
+     mse: array with mse on the control and treated group.
+     bias: array with bias on the control and treated group.
+     t: [], treatment assigment on data_all.
+     y_obs: [], observed outcome on data_all.
+    """
 
     history = model.fit(data, steps_per_epoch=param_method['steps'], epochs=param_method['epochs'], verbose=2)
     try:
@@ -188,13 +182,10 @@ def _fit_base_models(model, data, data_all, param_method):
 def _predict_base_models(data, model, steps):
     """Predicts the outcome on the full data.
 
-  Args:
-    data: tf.data.Dataset.
-    model: fitted model.
-    #quick: predict in a subset of data.
-  Returns:
-    arrays with predicted outcome, observed outcome, and treat. assignment.
-  """
+    :param data: tf.data.Dataset.
+    :param model: tf.keras.Model.
+    :return: arrays with predicted outcome, observed outcome, and treat. assignment.
+    """
     y_pred = []
     y_obs = []
     t = []
@@ -213,9 +204,20 @@ def _predict_base_models(data, model, steps):
 
 
 def _calculate_propensity_score(param_method, data, y_treated_hat, y_control_hat, t, y):
+    """ Calculating Propensity Score and return the treatment effect.
+
+    :param param_method: dictionary.
+    :param data: tf.data.Dataset.
+    :param y_treated_hat: [], predicted outcome if treated.
+    :param y_control_hat: [], predicted outcome if control.
+    :param t: [], treatment assignment.
+    :param y: [], observed outcome.
+    :return: tau (int, treat effect), var (int, variance)
+    """
     t = t.ravel()
     y = y.ravel()
 
+    # Calculating the Propensity Score.
     if param_method['learn_prop_score']:
         data_all = data.dataset_all_ps
         # Propensity score using a logistic regression.
@@ -249,6 +251,7 @@ def _calculate_propensity_score(param_method, data, y_treated_hat, y_control_hat
         residual_treated = (residual_treated / 0.5)
         residual_control = (residual_control / 0.5)
 
+    # Calculating the treatment effect.
     residual_dif = (residual_treated - residual_control)
     tau_estimated = np.mean(np.add(y_dif, residual_dif))
 
@@ -263,11 +266,12 @@ def _calculate_propensity_score(param_method, data, y_treated_hat, y_control_hat
 
 
 def _truncate_by_g(attribute, g, level=0.005):
-    """
+    """ Remove samples with extreme propensity score values for stability.
+
     Remove rows with too low or too high g values. attribute and g must have same dimensions.
-    :param attribute: column we want to keep after filted
-    :param g: filter
-    :param level: limites
+    :param attribute: [], array to be filtered.
+    :param g: [], array used to filter.
+    :param level: float, limites.
     :return: filted attribute column
     """
     assert len(attribute) == len(g), 'Dimensions must be the same!' + str(len(attribute)) + ' and ' + str(len(g))

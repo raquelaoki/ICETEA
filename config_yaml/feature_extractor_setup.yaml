@@ -1,11 +1,11 @@
 parameters:
+    backbone_drop_rate: 0.25
+    batch_size: 16
+    epochs: 10
+    hidden_size: 64
+    input_shape: [ 128, 128 ]
+    learning_rate: 0.0001
+    num_classes: 5
+    optimizer: 'adam'
+    steps_per_epoch: 5
     xfe_proportion_size: 0.33 #  Proportion of X used for the feature extractor.
-    batch_size: 16  #Feature Extractor only.
-    input_shape: [ 128, 128 ]  #Feature Extractor only.
-    num_classes: 5  #Feature Extractor only.
-    backbone_drop_rate: 0.25  #Feature Extractor only.
-    optimizer: 'adam'  #Feature Extractor only.
-    learning_rate: 0.0001  #Feature Extractor only.
-    steps_per_epoch: 5  #Feature Extractor only.
-    epochs: 10  #Feature Extractor only.
-    hidden_size: 64  #Feature Extractor only.

@@ -1,9 +1,23 @@
+# coding=utf-8
+# Copyright 2022 The Google Research Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """ ICETEA Feature Extractor.
 
 Reference:
 github.com/Google-Health/genomics-research/blob/main/ml-based-vcdr/learning/model_utils.py
 """
-
 import cv2
 import logging
 import math
@@ -11,9 +25,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import tensorflow as tf
-
 from sklearn.preprocessing import MinMaxScaler
+import tensorflow as tf
 from tensorflow.io import gfile
 
 # Local imports
@@ -23,11 +36,18 @@ import icetea_data_simulation as ds
 logger = logging.getLogger(__name__)
 
 
-def feature_extrator_wrapper(config, prefix_train = 'train',prefix_extract = 'extract',prefix_trainNew='trainNew'):
+def feature_extrator_wrapper(config):
+    """Compile the Feature Extractor routine.
+    1) Convert png to TFRecords.
+    2) Train model to extract features.
+    3) Save features.csv with features.
 
+    :param config: dictionary.
+    :return: None.
+    """
+
+    # 0. Checking the consistency of the config file.
     hp._consistency_check_feature_extractor(config)
-    prefix_trainNew = prefix_output = prefix_trainNew
-
     paths = {
         'images': config['path_images_png'],  # folder
         'meta': config['meta'],  # file
@@ -37,7 +57,7 @@ def feature_extrator_wrapper(config, prefix_train = 'train',prefix_extract = 'ex
     # 1. From .PNG to TFRecord
     # Kaggle datasets contain the individual images and a csv file with targets.
     # This first section will combine the images with the csv and save as TFRecord.
-    logger.info('1. Convert PNG to RFRecord.')
+    logger.info('1. Convert PNG to TFRecord.')
     kd.write_images_as_tfrecord(paths=paths,
                                 xfe_proportion_size=config['xfe_proportion_size']
                                 )
@@ -51,8 +71,11 @@ def feature_extrator_wrapper(config, prefix_train = 'train',prefix_extract = 'ex
 
 
 def compile_model(model_config):
-    """Builds a graph and compiles a tf.keras.Model based on the configuration."""
+    """Builds a graph and compiles a tf.keras.Model based on the configuration.
 
+    :param model_config: dictionary.
+    :return: model, tf.keras.Model.
+    """
     model = _inceptionv3(model_config)
     losses = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
     metrics = [tf.keras.metrics.CategoricalAccuracy(name='cat_accuracy')]
@@ -64,20 +87,17 @@ def compile_model(model_config):
 
     model.summary()
     print(f'Number of l2 regularizers: {len(model.losses)}.')
-
     return model
 
 
 def _inceptionv3(model_config, image_shape=[256, 256]):
     """Returns an InceptionV3 architecture as defined by the configuration.
-    See https://tensorflow.org/api_docs/python/tf/keras/applications/InceptionV3.
-    Args:
-    model_config: A dict containing model hyperparamters.
-    image_shape
-    Returns:
-    An InceptionV3-based model.
-    """
+    Reference: https://tensorflow.org/api_docs/python/tf/keras/applications/InceptionV3
 
+    :param model_config: dictionary with model parameters.
+    :param image_shape [int,int].
+    :return: model, tf.keras.Model.
+    """
     backbone = tf.keras.applications.InceptionV3(
         include_top=False,
         weights=model_config.get('weights', 'imagenet'),
@@ -182,11 +202,12 @@ def extract_hx(model_config):
 def _extraction(data, path, model):
     """Extract features using the model (last layer of an image model - before prediction of classes) on the data.
 
-  Args:
-    data: built dataset.
-    path: folder to save csv file.
-    model: fitted model.
-  """
+    :param data: tf.data.Dataset.
+    :param path: str, path to save features.
+    :param model tf.keras.Model.
+    :return: pd.DataFrame()
+    """
+
     progbar = tf.keras.utils.Progbar(
         None,
         width=30,
@@ -195,36 +216,20 @@ def _extraction(data, path, model):
         stateful_metrics=None,
         unit_name='step')
 
-    # features = []
     image_id = []
     features = pd.DataFrame()
 
+    # Making Predictions.
     for i, (batch_images, batch_labels, batch_id) in enumerate(data):
         batch_predict = model.predict_on_batch(batch_images)
-        # features.append(batch_predict)
-        # print('_extraction',batch_predict.shape,batch_predict[0:3,0:3])
         features = pd.concat([features, pd.DataFrame(batch_predict)], axis=0)
-        ##print('fetures', features.tail())
         image_id.append(batch_id)
         progbar.add(1)
-        # if i > 10:
-        #    break
-
-    # features = np.array(features)
-    # s = features.shape
-    # print(
-    #    '\nshapes pd ', featuresnew.shape
-    # )
-    # print('\nshapes ', s, s[0].shape)
-    # features = features.reshape(s[0] * s[1], s[2])
 
     columns = [f'f{i}' for i in range(features.shape[1])]
-    # features = pd.DataFrame(data=features,
-    #                       columns=columns)
     features.columns = columns
     image_id = np.concatenate(image_id).ravel()
     image_id = [item.decode('utf-8') for item in image_id]
-    # print('shape', features.shape)
     features['images_id'] = image_id
     with gfile.GFile(path + '/features.csv', 'w') as table_names:
         table_names.write(features.to_csv(index=False))

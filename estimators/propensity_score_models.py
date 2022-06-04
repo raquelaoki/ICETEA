@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# """config!
+# """propensity_score_models!
 #
-# config files creation of objects, and organization
+# Implementation of the propensity score models.
 #
 # """
 
@@ -34,9 +34,7 @@ from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 
 class PS_LogisticRegression_NN:
     """Make NN version of Logistic Regression.
-
-  Used as Propensity Score Model
-  """
+    """
 
     def __init__(self, image_size):
         super(PS_LogisticRegression_NN, self).__init__()
@@ -45,9 +43,8 @@ class PS_LogisticRegression_NN:
     def fit(self, data):
         """Fits a Classification Model.
 
-    Args:
-      data: prefetch batches 16 [B, H, W, C], not repeated, not shuffled.
-    """
+        :param data: prefetch batches 16 [B, H, W, C], not repeated, not shuffled.
+        """
         self.model.compile(
             optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         epochs = 10
@@ -58,38 +55,34 @@ class PS_LogisticRegression_NN:
     def predict_proba(self, data):
         """Predict Probability of each class.
 
-    Args:
-      data: tf.data.Dataset
-    Returns:
-      predict: predictions array
-    """
+        :param data: tf.data.Dataset
+        :return: predict: predictions array
+        """
         t_pred = []
         t = []
         for i, (batch_x, batch_t) in enumerate(data):
             t_pred.append(self.model.predict_on_batch(batch_x))
             t.append(batch_t.numpy())
-            #if quick and i > 2000:
-            #    break
 
         t_pred = np.concatenate(t_pred).ravel().reshape(-1, 2)
         return t_pred
 
-    def _logistic_regression_architecture(self,image_size):
+    def _logistic_regression_architecture(self, image_size):
         """Implements of Propensity Score.
 
         It takes as input tensors of shape [B, H, W, C] and outputs [B,Y]
-        Returns:
-          model: NN object
+        :param image_size: int
+        :return: model: tf.keras.Mode
         """
         # A simple logistic regression implemented as NN.
-        image_size = [image_size,image_size]
+        image_size = [image_size, image_size]
         inputs = tf.keras.Input(shape=[*image_size, 3], name='LogisticRegression')
 
         backbone = tf.keras.applications.ResNet50(
             include_top=False,
             weights='imagenet',
             input_shape=(*image_size, 3),
-            pooling= 'avg', )
+            pooling='avg', )
         backbone_drop_rate = 0.2
 
         inputs = tf.keras.Input(shape=[*image_size, 3], name='image')

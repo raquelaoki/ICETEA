@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# """config!
+# """base_models!
 #
-# config files creation of objects, and organization
+# Base Models used by estimators.
 #
 # """
 
@@ -35,11 +35,9 @@ from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 def image_model_image_regression(model_config):
     """Implements a one-layer NN that mimics a Linear Regression.
 
-  Args:
-    model_config: dictionary with parameters
-  Returns:
-    model: Model object
-  """
+    :param model_config: dictionary with parameters.
+    :return: model: tf.keras.Model.
+    """
     # A simple linear regression implemented as NN.
     last_activation = model_config.get('activation', 'linear')
     image_size = [model_config['image_size'], model_config['image_size']]
@@ -59,11 +57,9 @@ def image_model_image_regression(model_config):
 def image_model_inceptionv3(model_config):
     """Implements inceptionV3 NN model.
 
-  Args:
-    model_config: dictionary with parameters
-  Returns:
-    model: Model object
-  """
+    :param model_config: dictionary with parameters.
+    :return: model: tf.keras.Model.
+    """
     last_activation = model_config.get('activation', 'linear')
     image_size = [model_config['image_size'], model_config['image_size']]
     backbone = tf.keras.applications.InceptionV3(
@@ -88,14 +84,12 @@ def image_model_inceptionv3(model_config):
 def image_model_resnet50(model_config):
     """Implements Resnet NN model.
 
-  Reference:
-  https://keras.io/api/applications/#usage-examples-for-image-classification-models
+    Reference:
+    https://keras.io/api/applications/#usage-examples-for-image-classification-models
 
-  Args:
-    model_config: dictionary with parameters
-  Returns:
-    model: Model object
-  """
+    :param model_config: dictionary with parameters
+    :return: model: tf.keras.Model
+    """
     image_size = [model_config['image_size'], model_config['image_size']]
     last_activation = model_config.get('activation', 'linear')
     backbone = tf.keras.applications.ResNet50(
@@ -110,7 +104,6 @@ def image_model_resnet50(model_config):
 
     hid = backbone(inputs)
     hid = tf.keras.layers.Dropout(backbone_drop_rate)(hid)
-    #x = tf.keras.layers.GlobalAveragePooling2D()(x)
     outputs = tf.keras.layers.Dense(1, activation=last_activation,
                                     use_bias=True)(hid)
 

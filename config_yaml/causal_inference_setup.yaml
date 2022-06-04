@@ -1,16 +1,16 @@
 parameters:
-    epochs: [5]
-    steps: [5]
-    batch_size: 64
-    name_estimator: ['aipw']
-    name_base_model: ['image_regression','resnet50','inceptionv3']
-    name_metric: ['mse']
-    output_name: 'aipw_'
-    use_tpu: False
     adopt_multiworker: False
-    using_gc: False
-    learn_prop_score: [False]
-    name_prop_score: ['']
-    name_data: 'kagle_retinal'
-    prefix_train: 'trainNew'
+    batch_size: 64
+    epochs: [5]
     image_size: [256,256]
+    learn_prop_score: [False]
+    name_base_model: ['image_regression','resnet50','inceptionv3']
+    name_data: 'kagle_retinal'
+    name_estimator: ['aipw']
+    name_metric: ['mse']
+    name_prop_score: ['']
+    output_name: 'aipw_'
+    prefix_train: 'trainNew'
+    steps: [5]
+    use_tpu: False
+    using_gc: False

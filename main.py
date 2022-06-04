@@ -15,7 +15,10 @@
 
 """Main file.
 Run a range of items depending on the flags.
-
+Options:
+- Feature Extractor.
+- Data Simulation.
+- Causal Inference.
 """
 from absl import app
 from absl import flags
@@ -27,13 +30,13 @@ import os
 import pandas as pd
 import sys
 import tensorflow as tf
-import yaml
 from tensorflow.io import gfile
 from tensorflow.python.client import device_lib
+import yaml
+
 
 # Local Imports.
 import estimators
-#import helper_data as hd
 import icetea_feature_extraction as fe
 import icetea_data_simulation as ds
 import helper_parameters as hp
@@ -101,44 +104,15 @@ flags.DEFINE_integer('ci_batch_size', 64, 'Batch Size')
 flags.DEFINE_string('ci_prefix_train', 'trainNew', 'TFRecords - Causal Inference Files (after join)')
 
 
-def upload_blob(bucket_name, source_file_name, destination_blob_name):
-    """Uploads a file to the bucket."""
-    # IF RUNNING CODE ON GOOGLE CLOUD.
-    # The ID of your GCS bucket
-    # bucket_name = "your-bucket-name"
-    # The path to your file to upload
-    # source_file_name = "local/path/to/file"
-    # The ID of your GCS object
-    # destination_blob_name = "storage-object-name"
-
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name + source_file_name)
-    blob.upload_from_filename(source_file_name)
-    logger.info(
-        f"File {source_file_name} uploaded to {destination_blob_name}."
-    )
-
-
-def update_experiments(filename, path_root, path_features, row, status):
-    list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, filename + '.csv'))
-    assert list_of_datasets['running'][row] != 'Done', 'SIMULATION ' + row + ' already done!'
-    list_of_datasets['running'][row] = status
-    if 'Unnamed: 0' in list_of_datasets.columns:
-        list_of_datasets.drop('Unnamed: 0', axis=1, inplace=True)
-    list_of_datasets.to_csv(os.path.join(path_root, path_features, filename + '.csv'))
-
-
 def main(_):
-    # params_path, running_indexes_path, use_tpus_str
+    # Loading yaml files or only using flags.
+    config_paths = {}
     if FLAGS.load_yaml:
         path_config = FLAGS.path_config_folder
         assert tf.io.gfile.isdir(path_config), path_config + ': Folder does not exist!'
         with open(os.path.join(path_config, 'paths.yaml')) as f:
             config_paths = yaml.safe_load(f)
         config_paths = config_paths['parameters']
-    else:
-        config_paths = {}
     # Defining the important paths.
     config_paths['path_root'] = config_paths.get('path_root', FLAGS.path_root)
     config_paths['path_images_png'] = config_paths.get('path_images_png', FLAGS.path_images_png)
@@ -147,13 +121,13 @@ def main(_):
     config_paths['path_tfrecords_new'] = config_paths.get('path_tfrecords_new', FLAGS.path_features)
     config_paths['path_results'] = config_paths.get('path_results', FLAGS.path_features)
 
+    # Running Feature Extraction.
     if FLAGS.feature_extraction:
+        config_fe = {}
         if FLAGS.load_yaml:
             with open(os.path.join(path_config, 'feature_extractor_setup.yaml')) as f:
                 config_fe = yaml.safe_load(f)
             config_fe = config_fe['parameters']
-        else:
-            config_fe = {}
         config_fe = utils.adding_paths_to_config(config_fe, config_paths)
         config_fe['xfe_proportion_size'] = config_fe.get('xfe_proportion_size', FLAGS.xfe_proportion_size)
         config_fe['metafile'] = config_fe.get('metafile', FLAGS.metafile)
@@ -171,13 +145,13 @@ def main(_):
         config_fe = hp.consistency_check_feature_extractor(config_fe)
         fe.feature_extrator_wrapper(config_fe)
 
+    # Running Data Simulation.
     if FLAGS.data_simulation:
+        config_ds = {}
         if FLAGS.load_yaml:
             with open(os.path.join(path_config, 'data_simulation_setup.yaml')) as f:
                 config_ds = yaml.safe_load(f)
             config_ds = config_ds['parameters']
-        else:
-            config_ds = {}
         config_ds = utils.adding_paths_to_config(config_ds, config_paths)
         config_ds['b'] = config_ds.get('b', FLAGS.data_sim_b)
         config_ds['knobs'] = config_ds.get('knobs', FLAGS.data_sim_knobs)
@@ -188,19 +162,18 @@ def main(_):
         config_ds = hp.consistency_check_data_simulation(config_ds)
         ds.data_simulation_wrapper(config_ds)
 
+    # Running Causal Inference.
     if FLAGS.causal_inference:
+        config_ci = {}
+        running_indexes = FLAGS.running_indexes
         if FLAGS.load_yaml:
             with open(os.path.join(path_config, 'causal_inference_setup.yaml')) as f:
                 config_ci = yaml.safe_load(f)
             config_ci = config_ci['parameters']
-
             name_yaml_index = FLAGS.name_yaml_index
             with open(os.path.join(path_config, name_yaml_index)) as f:
                 running_indexes = yaml.safe_load(f)
             running_indexes = running_indexes['parameters']['running_indexes']
-        else:
-            config_ci = {}
-            running_indexes = FLAGS.running_indexes
 
         use_tpu = config_ci.get('use_tpu', FLAGS.use_tpu)
         adopt_multiworker = config_ci.get('adopt_multiworker', FLAGS.adopt_multiworker)
@@ -214,7 +187,6 @@ def main(_):
         param_data['output_name'] = config_ci.get('output_name', FLAGS.output_name)
 
         param_method = {}
-        #param_method = utils.adding_paths_to_config(param_method, config_paths)
         param_method['name_estimator'] = config_ci.get('name_estimator', FLAGS.ci_name_estimator)
         param_method['name_metric'] = config_ci.get('name_metric', FLAGS.ci_metric)
         param_method['name_base_model'] = config_ci.get('name_base_model', FLAGS.ci_name_base_model)
@@ -226,7 +198,6 @@ def main(_):
         hp.consistency_check_causal_methods(param_method)
 
         config_ci = utils.adding_paths_to_config(config_ci, config_paths)
-        #config_ci['output_name'] = config_ci.get('output_name', FLAGS.output_name)
         using_gc = config_ci.get('using_gc', FLAGS.using_gc)
         config_ci['bucket_name'] = config_ci.get('bucket_name', FLAGS.bucket_name)
 
@@ -277,7 +248,7 @@ def main(_):
                         utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset)
 
                     utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset)
-                    update_experiments('true_tau_sorted', path_root, path_features, i, status='done')
+
     logger.info('DONE')
     return
 

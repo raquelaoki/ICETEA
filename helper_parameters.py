@@ -13,16 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-"""Parameters Check
-Check the consistency of the parameters and complete some missing fields based on conditions.
+"""Parameters Helper.
+1) Helps to contruct the parameter files (dictionaries)
+2) Check the consistency of the parameters and complete/raise error for some missing fields.
 """
-import logging
-import pandas as pd
-import yaml
-import os
-import itertools
 from inspect import getmembers, isfunction, isclass
-from typing import Dict
+import itertools
+import logging
+import os
+import pandas as pd
 import numpy as np
 from sklearn import ensemble
 from sklearn import linear_model
@@ -33,22 +32,25 @@ from tensorflow.keras import regularizers
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
+import yaml
 
-# import estimators
+# Local Imports
 import estimators.base_models as base_models
 import estimators.propensity_score_models as ps_models
 import estimators.all_estimators as est
 
-# from icetea import estimators
 
 IMAGE_SIZE = [256, 256]
-TensorDict = Dict[str, tf.Tensor]
-
 logger = logging.getLogger(__name__)
 
 
 def consistency_check_feature_extractor(config):
-    # Checking if required folders exist.
+    """Checks if feature_extractor required folders exist.
+    It also checks if other parameters are consistent.
+
+    :param config: dictionary with required paths and parameters.
+    :return: config
+    """
     check_folders_exist = [config['path_images_png'],
                            config['path_tfrecords'],
                            config['path_features'],
@@ -62,7 +64,12 @@ def consistency_check_feature_extractor(config):
 
 
 def consistency_check_data_simulation(config):
-    # Checking if required folders exist.
+    """Checks if data_simulation required folders exist.
+    It also checks if other parameters are consistent.
+
+    :param config: dictionary with required paths and parameters.
+    :return: config
+    """
     check_folders_exist = [config['path_root'],
                            config['path_tfrecords'],
                            config['path_features'],
@@ -78,6 +85,12 @@ def consistency_check_data_simulation(config):
 
 
 def consistency_check_causal_inference(config):
+    """Checks if causal_inference required folders exist.
+    It also checks if other parameters are consistent.
+
+    :param config: dictionary with required paths and parameters.
+    :return: config
+    """
     check_folders_exist = [config['path_root'],
                            config['path_features'],
                            config['path_tfrecords_new'],
@@ -91,6 +104,12 @@ def consistency_check_causal_inference(config):
 
 
 def _check_folders(path_root, check_folders_exist):
+    """Check if folders in array exists.
+
+    :param path_root: str (path), parent folder.
+    :param check_folders_exist: list[str], paths to be checked.
+    :return: None
+    """
     check_folders_exist = [os.path.join(path_root, path) for path in check_folders_exist]
     for path in check_folders_exist:
         assert tf.io.gfile.isdir(path), path + ': Folder does not exist!'
@@ -105,9 +124,8 @@ def create_configs(config):
     {a='data2',b='model1'}, {a='data2',b='model2'}].
 
     Args:
-    dict_: dictionary with the lists.
-    Returns:
-    list of config files.
+    :param config: dictionary with the lists.
+    :return: [dict, dict, dict...] - a list of dictionaries.
     """
     keys = config.keys()
     vals = config.values()
@@ -118,6 +136,13 @@ def create_configs(config):
 
 
 def create_methods_obj(config, use_tpu=False, strategy=None):
+    """Creating Methods Objects.
+
+    :param config: dictionary, keys = {estimator, base_model, metric, learn_prop_score, prop_score, ...}.
+    :param use_tpu: bool. If True, uses a strategy to train using TPUs.
+    :param strategy: strategy if using multi-process.
+    :return: dictionary with the objects.
+    """
     config['estimator'] = _estimator_construction(model_config=config)
     config['base_model'] = _base_image_model_construction_with_strategy(model_config=config,
                                                                         use_tpus=use_tpu,
@@ -129,6 +154,11 @@ def create_methods_obj(config, use_tpu=False, strategy=None):
 
 
 def consistency_check_causal_methods(config):
+    """ It checks if a method is implemented based functions and classes available on estimators.
+
+    :param config: dictionary.
+    :return: None.
+    """
     def _raise_not_implemented(item_implemented, item_called):
         for item in item_called:
             if item not in item_implemented:
@@ -158,6 +188,11 @@ def consistency_check_causal_methods(config):
 
 
 def _estimator_construction(model_config):
+    """ Returns the estimator based on the name_estimator.
+
+    :param model_config: dictionary.
+    :return: estimator.
+    """
     if model_config['name_estimator'] == 'aipw':
         return est.estimator_aipw
     elif model_config['name_estimator'] == 'kob':
@@ -167,6 +202,13 @@ def _estimator_construction(model_config):
 
 
 def _base_image_model_construction_with_strategy(model_config, use_tpus=False, strategy=None):
+    """Return model based on tf.distribute.experimental.strategy.
+
+    :param model_config: dictioanry.
+    :param use_tpus: bool, if True, uses TPUs.
+    :param strategy: tf.distribute.experimental.
+    :return: model.
+    """
     if use_tpus:
         with strategy.scope():
             model = _base_image_model_construction(model_config)
@@ -176,13 +218,11 @@ def _base_image_model_construction_with_strategy(model_config, use_tpus=False, s
 
 
 def _base_image_model_construction(model_config):
-    """Constructs the image base model.
+    """Contructs the base model objects.
 
-  Args:
-    model_config: dicstionary with parameters
-  Returns:
-    model: Model object
-  """
+    :param model_config: dictionary.
+    :return: model.
+    """
     model_config['input_shape'] = (model_config['image_size'], model_config['image_size'], 3)
     initial_learning_rate = model_config.get('initial_learning_rate', 0.001)
 
@@ -205,6 +245,11 @@ def _base_image_model_construction(model_config):
 
 
 def _metric_function(name_metric):
+    """ Creates metric object.
+
+    :param name_metric: str.
+    :return: metric object.
+    """
     if name_metric == 'mse':
         return sk_metrics.mean_squared_error
     else:
@@ -213,6 +258,12 @@ def _metric_function(name_metric):
 
 
 def _prop_score_function(name_prop_score, image_size):
+    """ Creates Propensity Score object.
+
+    :param name_prop_score: str.
+    :param image_size: [,]
+    :return: prop_score object.
+    """
     if name_prop_score == 'LogisticRegression_NN':
         return ps_models.PS_LogisticRegression_NN(image_size)
     else:

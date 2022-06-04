@@ -24,28 +24,66 @@ Experiments class: fits the estimator, return metrics
 """
 import logging
 import math
-import os
-import time
-
+import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from tensorflow.io import gfile
+import time
+
+
+# Local Import
+import helper_parameters as hp
+
 
 AUTOTUNE = tf.data.AUTOTUNE
-import helper_parameters as hp
 logger = logging.getLogger(__name__)
 
 
 def adding_paths_to_config(config, config_paths):
+    """ Copying paths to one config to other.
+
+    :param config: new config file.
+    :param config_paths: old config file with paths.
+    :return: dictionary, config with paths.
+    """
     for key in config_paths:
         config[key] = config_paths[key]
     return config
 
 
+def upload_blob(bucket_name, source_file_name, destination_blob_name):
+    """Uploads a file to the bucket.
+    Reference: https://cloud.google.com/storage/docs/uploading-objects#storage-upload-object-python
+    """
+    # IF RUNNING CODE ON GOOGLE CLOUD.
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
+    # The path to your file to upload
+    # source_file_name = "local/path/to/file"
+    # The ID of your GCS object
+    # destination_blob_name = "storage-object-name"
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name + source_file_name)
+    blob.upload_from_filename(source_file_name)
+    logger.info(
+        f"File {source_file_name} uploaded to {destination_blob_name}."
+    )
+
+
 def save_results(using_gc, params, results, i):
+    """ Saving csv file with causal inference results.
+
+    :param using_gc: bool, if True, saves on Google Cloud.
+    :param params: dictionary.
+    :param results: pd.DataFrame() with results.
+    :param i: simulation index.
+    :return: None.
+    """
     if using_gc:
         results.to_csv(params['output_name'] + str(i) + '.csv')
         upload_blob(bucket_name=params['bucket_name'],
@@ -62,8 +100,20 @@ def save_results(using_gc, params, results, i):
 def repeat_experiment(param_data, param_method,
                       seed_data, seed_method,
                       model_repetitions=1, use_tpu=False, strategy=None):
-    table = pd.DataFrame()
+    """ Routine to run several experiments.
 
+    Each row is a causal inference method.
+
+    :param param_data: dictionary.
+    :param param_method: dictionary.
+    :param seed_data: str, data id.
+    :param seed_method: int.
+    :param model_repetitions: int, repetitions.
+    :param use_tpu: bool.
+    :param strategy: tf.distribute.Strategy.
+    :return: pd.DataFrame()
+    """
+    table = pd.DataFrame()
     for b in range(model_repetitions):
         logger.debug('Model Repetition - ' + str(b))
         results = experiments(param_data=param_data,
@@ -80,15 +130,17 @@ def repeat_experiment(param_data, param_method,
 def experiments(param_data, seed_data,
                 param_method, seed_method,
                 model_repetition_index=1, use_tpu=False, strategy=None):
-    """Function to run experiments.
-  Args:
-    data: DataSimulation obj.
-    seed: currently not used.
-    param_method: dictionary with estimator's parameters.
-  Returns:
-    Dictionary with simulation results.
-    col names
-  """
+    """Function to run causal inference method.
+
+    :param param_data: dictionary.
+    :param seed_data: str, id.
+    :param param_method: dictionary.
+    :param seed_method: int.
+    :param model_repetition_index: int.
+    :param use_tpu: bool.
+    :param strategy: tf.distribute.Strategy
+    :return: pd.DataFrame()
+    """
     start = time.time()
     logger.debug('Creating data.')
     data = ImageData(seed=seed_data, param_data=param_data)
@@ -117,21 +169,10 @@ def experiments(param_data, seed_data,
     return pd.DataFrame(tab, index=[0])
 
 
-
 class ImageData:
-    """Load image dataset.
-
+    """Loading image dataset.
     The path to the folder determines the type of outcome (clinical or simulated).
-    param_data={'name':'kagle_retinal',
-              'path_tfrecords':str,
-              'prefix_train':str,
-              'image_size':[s,s],
-              'batch_size':int
-     }
-
-     seed = sim_bx_y_val_val_val
     """
-
     def __init__(self, seed, param_data):
         super(ImageData, self).__init__()
         self.name = param_data['name']
@@ -151,8 +192,6 @@ class ImageData:
         dataset = dataset.map(_decode_img, num_parallel_calls=tf.data.AUTOTUNE)
         dataset = dataset.map(lambda x: _filter_treatment(x, seed),
                               num_parallel_calls=tf.data.AUTOTUNE)
-
-        # self.dataset = _get_dataset(dataset, batch_size=batch_size)
 
         # split treated and non treated and pred (for full conterfactual).
         ds_treated = dataset.filter(lambda x: x['t'])
@@ -182,12 +221,9 @@ class ImageData:
 def _get_parse_example_fn(features):
     """Returns a function that parses a TFRecord.
 
-  Args:
-    features: dict with features for the TFRecord.
-  Returns:
-    _parse_example
-  """
-
+    :param features: dict with features for the TFRecord.
+    :return: _parse_example
+    """
     def _parse_example(example):
         return tf.io.parse_single_example(example, features)
 
@@ -197,23 +233,20 @@ def _get_parse_example_fn(features):
 def _decode_img(example):
     image_size = [256, 256]
     image = tf.image.decode_jpeg(example['image/encoded'], channels=3)
-    image = tf.cast(image, tf.float32) / 255.0  # [0,255] -> [0,1]
+    image = tf.cast(image, tf.float32) / 255.0
     image = tf.image.resize(image, image_size)
     example['image/encoded'] = image
-    # image, example['image/target'], example['image/id']
     return example
 
 
 def _filter_cols_ps(dataset, seed):
     """Mapping function.
 
-  Filter columns for propensity score batch.
-  Args:
-    dataset: tf.data.Dataset with several columns.
-    seed: int
-  Returns:
-    dataset: tf.data.Dataset with two columns (X,T).
-  """
+    Filter columns for propensity score batch.
+    :param dataset: tf.data.Dataset with several columns.
+    :param seed: int.
+    :return: dataset: tf.data.Dataset with two columns (X,T).
+    """
     t_name = f'image/{seed}-t'
     return dataset['image/encoded'], dataset[t_name]
 
@@ -221,13 +254,11 @@ def _filter_cols_ps(dataset, seed):
 def _filter_cols_pred(dataset, seed):
     """Mapping function.
 
-  Filter columns for predictions batch.
-  Args:
-    dataset: tf.data.Dataset with several columns.
-    seed: int.
-  Returns:
-    dataset: tf.data.Dataset with three columns (X,Y,T).
-  """
+    Filter columns for predictions batch.
+    :param dataset: tf.data.Dataset.
+    :param seed: int.
+    :return: dataset: tf.data.Dataset with three columns (X,Y,T).
+    """
     col_y = f'image/{seed}-y'
     return dataset['image/encoded'], dataset[col_y], dataset['t']
 
@@ -235,13 +266,12 @@ def _filter_cols_pred(dataset, seed):
 def _filter_treatment(dataset, seed):
     """Mapping function.
 
-  Constructs bool variable (treated = True, control = False)
-  Args:
-    dataset: tf.data.Dataset
-    seed: int
-  Returns:
-    dataset: tf.data.Dataset
-  """
+    Constructs bool variable (treated = True, control = False).
+    :param dataset: tf.data.Dataset
+    :param seed: int
+
+    :return: dataset: tf.data.Dataset
+    """
     t = False
     if dataset[f'image/{seed}-t'] == 1:
         t = True
@@ -252,13 +282,11 @@ def _filter_treatment(dataset, seed):
 def _filter_cols(dataset, seed):
     """Mapping function.
 
-  Filter columns for batch.
-  Args:
-    dataset: tf.data.Dataset with several columns.
-    seed: int
-  Returns:
-    dataset: tf.data.Dataset with two columns (X, Y).
-  """
+    Filter columns for batch.
+    :param dataset: tf.data.Dataset
+    :param seed: int.
+    :return: dataset: tf.data.Dataset
+    """
     col_y = f'image/{seed}-y'
     return dataset['image/encoded'], dataset[col_y]
 
@@ -266,12 +294,9 @@ def _filter_cols(dataset, seed):
 def _get_dataset_ps(dataset, batch_size):
     """Prefetch and creates batches of data for the propensity score.
 
-  Args:
-    dataset: tf.data.Dataset TFRecord
-  Returns:
-    dataset: tf.data.Dataset batches
-  """
-
+    :param dataset: tf.data.Dataset TFRecord
+    :return: dataset: tf.data.Dataset
+    """
     def _preprocessing_ps(batch0, batch1):
         batch1 = tf.reshape(batch1, [-1])
         batch1 = tf.cast(batch1, tf.int32)
@@ -288,11 +313,9 @@ def _get_dataset_ps(dataset, batch_size):
 def _get_dataset(dataset, batch_size):
     """Prefetch and creates batches of data for base models.
 
-  Args:
-    dataset: tf.data.Dataset TFRecord
-  Returns:
-    dataset: tf.data.Dataset batches
-  """
+    :param dataset: tf.data.Dataset TFRecord
+    :return: dataset: tf.data.Dataset
+    """
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
     dataset = dataset.repeat()
     dataset = dataset.batch(batch_size)
