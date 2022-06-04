@@ -64,11 +64,12 @@ flags.DEFINE_string('feat_extract_optimizer', 'adam', 'Feature Extractor Optimiz
 flags.DEFINE_integer('feat_extract_batch_size', 16, 'Feature Extractor Batch Size.')
 flags.DEFINE_integer('feat_extract_input_shape', 128, 'Feature Extractor Image Input shape.')
 flags.DEFINE_integer('feat_extract_num_classes', 5, 'Feature Extractor num_classes.')
-flags.DEFINE_integer('feat_extract_learning_rate', 0.0002, 'Feature Extractor learning_rate.')
+flags.DEFINE_float('feat_extract_learning_rate', 0.0002, 'Feature Extractor learning_rate.')
 flags.DEFINE_integer('feat_extract_steps_per_epoch', 5, 'Feature Extractor steps_per_epoch.')
 flags.DEFINE_integer('feat_extract_hidden_size', 64, 'Feature Extractor hidden_size.')
 flags.DEFINE_integer('feat_extract_epochs', 10, 'Feature Extractor epochs.')
-flags.DEFINE_integer('feat_extract_backbone_drop_rate', 0.25, 'Feature Extractor backbone_drop_rate.')
+flags.DEFINE_float('feat_extract_backbone_drop_rate', 0.25, 'Feature Extractor backbone_drop_rate.')
+flags.DEFINE_float('xfe_proportion_size', 0.33, 'Proportion of data used on the FE.')
 
 # Data Simulation FLAGS.
 flags.DEFINE_bool('data_simulation', False, 'Run Data Simulation Components.')
@@ -84,13 +85,13 @@ flags.DEFINE_bool('data_sim_allow_shift', False, 'Data Sim allow_shift: allows s
 flags.DEFINE_bool('causal_inference', False, 'Run Causal Inference.')
 flags.DEFINE_list('ci_epochs', [10], 'Base-models DNN epochs.')
 flags.DEFINE_list('ci_steps', [20], 'Base-models DNN steps.')
-flags.DEFINE_list('ci_batch_size', 64, 'Base-models DNN batch_size.')
+#flags.DEFINE_list('ci_batch_size', [64], 'Base-models DNN batch_size.')
 flags.DEFINE_list('ci_name_estimator', ['aipw'], 'Causal Inference Estimator.')
 flags.DEFINE_list('ci_name_base_model', ['image_regression', 'resnet50', 'inceptionv3'], 'Base Models.')
 flags.DEFINE_list('ci_learn_prop_score', [False], 'Should a Prop Score Model be trained?')
 flags.DEFINE_list('ci_name_prop_score', ['LogisticRegression_NN'], 'Name Propensity Score (if training).')
 flags.DEFINE_list('ci_metric', ['mse'], 'Base models metrics.')
-flags.DEFINE_list('ci_model_repetitions', 1, 'Model repetitions.')
+flags.DEFINE_integer('ci_model_repetitions', 1, 'Model repetitions.')
 
 flags.DEFINE_string('output_name', 'result_', 'The csv file output_name.')
 flags.DEFINE_string('path_results', 'icetea_results/', 'Folder to save Causal Inference results.')
@@ -185,6 +186,8 @@ def main(_):
         param_data['batch_size'] = config_ci.get('batch_size', FLAGS.ci_batch_size)
         param_data['prefix_train'] = config_ci.get('prefix_train', FLAGS.ci_prefix_train)
         param_data['output_name'] = config_ci.get('output_name', FLAGS.output_name)
+        param_data['path_tfrecords_new'] = os.path.join(param_data['path_root'],
+                                                        param_data['path_tfrecords_new'])
 
         param_method = {}
         param_method['name_estimator'] = config_ci.get('name_estimator', FLAGS.ci_name_estimator)
@@ -201,10 +204,9 @@ def main(_):
         using_gc = config_ci.get('using_gc', FLAGS.using_gc)
         config_ci['bucket_name'] = config_ci.get('bucket_name', FLAGS.bucket_name)
 
-        list_of_datasets = pd.read_csv(os.path.join(path_root, path_features, 'true_tau.csv'))
+        list_of_datasets = pd.read_csv(os.path.join(config_paths['path_root'],
+                                                    config_paths['path_features'], 'true_tau.csv'))
         config_methods = hp.create_configs(param_method)
-
-        hp.consistency_check_causal_methods(config_methods)
 
         if adopt_multiworker:
             if use_tpu:
@@ -245,9 +247,9 @@ def main(_):
                         results_one_config = pd.merge(results_one_config, list_of_datasets, how='left')
                         results_one_dataset = pd.concat([results_one_dataset, results_one_config])
                         # Intermediate save.
-                        utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset)
+                        utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset, i=i)
 
-                    utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset)
+                    utils.save_results(using_gc=using_gc, params=config_ci, results=results_one_dataset, i=i)
 
     logger.info('DONE')
     return

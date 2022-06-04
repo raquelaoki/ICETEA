@@ -86,7 +86,7 @@ def checking_tfrecords_after_join(config, seed=None):
 
     param_data = {
         'name': 'kagle_retinal',
-        'path_tfrecords': os.path.join(config['path_root'], config['path_tfrecords_new']),
+        'path_tfrecords_new': os.path.join(config['path_root'], config['path_tfrecords_new']),
         'image_size': [256, 256],
         'batch_size': 2,
         'prefix_train': 'trainNew',

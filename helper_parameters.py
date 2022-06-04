@@ -166,7 +166,7 @@ def consistency_check_causal_methods(config):
                     item + 'is not currently implemented. Check the documentation on how to add it.')
 
     # Recover implemented methods based on functions inside py files.
-    implemented_estimators = getmembers(estimators, isfunction)
+    implemented_estimators = getmembers(est, isfunction)
     implemented_estimators = [e[0] for e in implemented_estimators]
     filter = np.array([e.startswith('estimator_') for e in implemented_estimators])
     implemented_estimators = np.array(implemented_estimators)
@@ -178,12 +178,12 @@ def consistency_check_causal_methods(config):
 
     implemented_prop_score_model = getmembers(ps_models, isclass)
     implemented_prop_score_model = [bm[0].replace('PS_', '') for bm in implemented_prop_score_model]
-
     implemented_metrics = ['mse']
 
     _raise_not_implemented(implemented_estimators, config['name_estimator'])
     _raise_not_implemented(implemented_base_models, config['name_base_model'])
-    _raise_not_implemented(implemented_prop_score_model, config['name_prop_score'])
+    if config['learn_prop_score'][0]:
+        _raise_not_implemented(implemented_prop_score_model, config['name_prop_score'])
     _raise_not_implemented(implemented_metrics, config['name_metric'])
 
 

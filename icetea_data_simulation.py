@@ -39,7 +39,8 @@ def data_simulation_wrapper(config):
     :return: None.
     """
     # 1) Creating simulations: it reads the features.csv file.
-    features_file = pd.read_csv(config['path_features'] + 'features.csv')
+    config['path_features'] = os.path.join(config['path_root'], config['path_features'])
+    features_file = pd.read_csv(os.path.join(config['path_features'], 'features.csv'))
     logger.info('Features - ' + str(features_file.shape[0]) + ' rows and ' + str(features_file.shape[1]) + ' columns.')
 
     simulations_files = []

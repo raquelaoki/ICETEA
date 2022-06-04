@@ -31,6 +31,7 @@ from tensorflow.io import gfile
 
 # Local imports
 import helper_data as hd
+import helper_parameters as hp
 import icetea_data_simulation as ds
 
 logger = logging.getLogger(__name__)
@@ -47,18 +48,13 @@ def feature_extrator_wrapper(config):
     """
 
     # 0. Checking the consistency of the config file.
-    hp._consistency_check_feature_extractor(config)
-    paths = {
-        'images': config['path_images_png'],  # folder
-        'meta': config['meta'],  # file
-        'write_in': config['path_tfrecords'],  # folder
-        'root': config['path_root'],
-    }
+    hp.consistency_check_feature_extractor(config)
+
     # 1. From .PNG to TFRecord
     # Kaggle datasets contain the individual images and a csv file with targets.
     # This first section will combine the images with the csv and save as TFRecord.
     logger.info('1. Convert PNG to TFRecord.')
-    kd.write_images_as_tfrecord(paths=paths,
+    hd.write_images_as_tfrecord(paths=config,
                                 xfe_proportion_size=config['xfe_proportion_size']
                                 )
 
@@ -67,7 +63,7 @@ def feature_extrator_wrapper(config):
     config['path_tfrecords'] = os.path.join(config['path_root'], config['path_tfrecords'])
     config['path_features'] = os.path.join(config['path_root'], config['path_features'])
 
-    model = fe.extract_hx(model_config)
+    model = extract_hx(config)
 
 
 def compile_model(model_config):
