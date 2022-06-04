@@ -104,28 +104,44 @@ Feature Extractor:
 ```shell
 # Loading yaml files:
 python main.py --feature_extraction=True --load_yaml=True
+```
 
-# Using Flags:
+(incomplete)
+```shell
+# Using Flags 
+DATA_DIR=~/data/
+python main.py \
+  --path_root ${DATA_DIR}/ \
 ```
 
 Data Simulation:
 ```shell
 # Loading yaml files:
 python main.py --data_simulation=True --load_yaml=True
-
-# Using Flags:
-
 ```
+
+(incomplete)
+```shell
+# Using Flags 
+DATA_DIR=~/data/
+python main.py \
+  --path_root ${DATA_DIR}/ \
+```
+
 
 Causal Inference:
 ```shell
 # Loading yaml files:
 python main.py --causal_inference=True --load_yaml=True
-
-# Using Flags:
-
 ```
 
+(incomplete)
+```shell
+# Using Flags 
+DATA_DIR=~/data/
+python main.py \
+  --path_root ${DATA_DIR}/ \
+```
 
 Running causal inference estimators in the semi-synthetic dataset.
 ```shell
