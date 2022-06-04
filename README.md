@@ -55,15 +55,15 @@ Files directly related to the framework:
 It trains the h() model (image model).
 - [`icetea_data_simulation.py`](icetea_data_simulation.py): Data Generation, and creates new tfrecords with the simulated 
 data (T and Y). The knobs are added in this phase.
-- [`data_kaggle.py`](helper_data.py): Specific for the EyePACS dataset adopted to illustrate
+- [`helper_data.py`](helper_data.py): Specific for the EyePACS dataset adopted to illustrate
 our framework. Contain functions to trasnform the png images into tfrecords, and to load tf.data.Dataset.
 
 Causal Inference experiments to explore the framework:
-- [`estimators.py`](estimators.py): Treatment Effect Estimators (oahaca and aipw). There are
-three base models available: resnet50, inceptionV3, linear regression;
 - [`utils.py`](utils.py) : Creates ImageData obj used by the estimators, experiments loop based on parameters;
-- [`config.py`](config.py): Based on parameters, it creates objectts used by the experiments.
-
+- [`helper_parameter.py`](helper_parameter.py): Based on parameters, it creates objectts used by the experiments.
+- [`all_estimators.py`](estimators/all_estimators.py):
+- [`base_models.py`](estimators/base_models.py):
+- [`propensity_score_models.py`](estimators/propensity_score_models.py):
 
 # Usage:
 This repository contains three options to create the benchmark dataset: using Colabs (Google Drive dependency), 
