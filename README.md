@@ -57,10 +57,11 @@ It trains the h() model (image model).
 data (T and Y). The knobs are added in this phase.
 - [`helper_data.py`](helper_data.py): Specific for the EyePACS dataset adopted to illustrate
 our framework. Contain functions to trasnform the png images into tfrecords, and to load tf.data.Dataset.
+- [`helper_parameter.py`](helper_parameter.py): Based on parameters, it creates objectts used by the experiments.
+- [`helper_beam.py`](helper_beam.py): 
 
 Causal Inference experiments to explore the framework:
 - [`utils.py`](utils.py) : Creates ImageData obj used by the estimators, experiments loop based on parameters;
-- [`helper_parameter.py`](helper_parameter.py): Based on parameters, it creates objectts used by the experiments.
 - [`all_estimators.py`](estimators/all_estimators.py):
 - [`base_models.py`](estimators/base_models.py):
 - [`propensity_score_models.py`](estimators/propensity_score_models.py):
