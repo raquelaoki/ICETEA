@@ -150,13 +150,12 @@ Check setup_aipw.yaml and indexes_groupa.yaml for examples of these configuratio
 
 
 ## 3. Beam Pipeline (Complexity: high)
+
 This option is recommened for who wants to run large scale experiments and has access to a lot of computing power. 
 
-TODO 
 
+### References
 
-
-###References
 [1] Cuadros J, Bresnick G. EyePACS: An Adaptable Telemedicine System for Diabetic Retinopathy Screening. Journal of 
 diabetes science and technology (Online). 2009;3(3):509-516.
 
