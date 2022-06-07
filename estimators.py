@@ -121,6 +121,7 @@ def _calculate_propensity_score(param_method, x, data, pred_treated, pred_contro
 
 
     if param_method['learn_prop_score']:
+        print('learning')
         # Propensity score using a logistic regression.
         prop_score = param_method['prop_score']
         prop_score.fit(x)

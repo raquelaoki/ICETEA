@@ -114,7 +114,7 @@ def main(params_path, running_indexes_path, use_tpus_str):
         'name_metric': ['mse'],
         'name_base_model': params['name_base_model'],
         'name_prop_score': ['LogisticRegression_NN'],
-        'learn_prop_score': [False],
+        'learn_prop_score': [True],
         'epochs': params['epochs'],
         'steps': params['steps'],
         'repetitions': params['repetitions']
