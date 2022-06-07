@@ -53,7 +53,7 @@ def generate_simulations(path_root,
         phi = np.random.uniform(-1, 1, n_cols)
         scale = np.random.uniform(0, alpha,1)
         eta_1 = np.random.uniform(-1, 1 * scale, n_cols)
-        eta_0 = np.random.uniform(-1, 1 , n_cols)
+        eta_0 = np.random.uniform(-1, 1, n_cols)
         return phi, eta_1, eta_0
 
     def _pi_x_function(features, gam, beta=0.5):
@@ -80,7 +80,7 @@ def generate_simulations(path_root,
         t = [np.random.binomial(1, item) for item in pi]
         return t
 
-    def _mu_x_function(features, eta1, eta0, gamma=0.5, scale=False):
+    def _mu_x_function(features, eta1, eta0, gamma=0.5, scale=False, alpha=1):
         """ Calcualte the outcome.
         :param features: input features, extracted on phase 1 of the framework;
         :param eta0: weights if untreated
@@ -91,7 +91,7 @@ def generate_simulations(path_root,
         mu1 = np.array(np.matmul(features, eta1))
         mu0 = np.array(np.matmul(features, eta0))
         full = np.array(np.concatenate([mu1, mu0]))
-        scaler = MinMaxScaler()
+        scaler = MinMaxScaler((0, alpha))
         scaler.fit(full.reshape(-1, 1))
         mu1 = scaler.transform(mu1.reshape(-1, 1))
         mu0 = scaler.transform(mu0.reshape(-1, 1))
@@ -165,7 +165,7 @@ def generate_simulations(path_root,
             #print(name_id, alpha_, beta_, gamma)
             phi, eta1, eta0 = _generation_weights(features.shape[1], alpha_)
             pi = _pi_x_function(features.values, phi, beta_)
-            mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_, scale=scale)
+            mu1, mu0 = _mu_x_function(features.values, eta1, eta0, gamma_, scale=scale, alpha=alpha_)
             y = [mu0[i][0] if p == 0 else mu1[i][0] for i, p in enumerate(pi)]
             knob = str(alpha_) + '_' + str(beta_) + '_' + str(gamma_)
             prefix = 'sim' + name_id + str(j) + '_b' + str(i) + '_' + knob
