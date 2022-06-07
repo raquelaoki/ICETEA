@@ -178,6 +178,7 @@ def extract_hx(model_config):
         epochs=model_config['epochs'],
         initial_epoch=0,
         steps_per_epoch=model_config['steps_per_epoch'],
+        validation_steps=20,
     )
 
     #  4. Creates a model with only the last layer of the image based model
