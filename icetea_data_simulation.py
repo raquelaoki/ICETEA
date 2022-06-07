@@ -183,7 +183,7 @@ def generate_simulations(path_root,
         T = [np.random.binomial(1, item) for item in pt]
         return T
 
-    def _y_function(features, eta_1, eta_0, gamma=0.5, shift=False):
+    def _y_function(features, eta_1, eta_0, gamma=0.5, shift=False, alpha=1):
         """ Calculating the outcome.
         :param features: pd.DataFrame().
         :param eta_0: matrix, weights if untreated.
@@ -196,7 +196,7 @@ def generate_simulations(path_root,
         y_1 = np.array(np.matmul(features, eta_1))
         y_0 = np.array(np.matmul(features, eta_0))
         mu = np.array(np.concatenate([y_1, y_0]))
-        scaler = MinMaxScaler()
+        scaler = MinMaxScaler((0, alpha))
         scaler.fit(mu.reshape(-1, 1))
         y_1 = scaler.transform(y_1.reshape(-1, 1))
         y_0 = scaler.transform(y_0.reshape(-1, 1))
@@ -271,7 +271,7 @@ def generate_simulations(path_root,
             # Creating treatment assigment.
             t = _t_function(features.values, phi, beta_)
             # Creating outcomes.
-            y_treat, y_control = _y_function(features.values, eta1, eta0, gamma_, shift=shift)
+            y_treat, y_control = _y_function(features.values, eta1, eta0, gamma_, shift=shift, alpha=alpha_)
             # Creatiing observed outcome.
             y = [y_control[i][0] if p == 0 else y_treat[i][0] for i, p in enumerate(t)]
 
