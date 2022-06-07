@@ -50,12 +50,13 @@ class PS_LogisticRegression_NN:
         epochs = 10
 
         self.model.summary()
-        self.model.fit(data, epochs=epochs, verbose=2)
+        self.model.fit(data, epochs=epochs, verbose=2, steps_per_epoch=20)
 
-    def predict_proba(self, data):
+    def predict_proba(self, data, step_lim=50):
         """Predict Probability of each class.
 
         :param data: tf.data.Dataset
+        :param step_lim: int.
         :return: predict: predictions array
         """
         t_pred = []
@@ -63,6 +64,8 @@ class PS_LogisticRegression_NN:
         for i, (batch_x, batch_t) in enumerate(data):
             t_pred.append(self.model.predict_on_batch(batch_x))
             t.append(batch_t.numpy())
+            if step_lim > i:
+                break
 
         t_pred = np.concatenate(t_pred).ravel().reshape(-1, 2)
         return t_pred
