@@ -1,2 +1,2 @@
 parameters:
-    running_indexes: [32,33,34,35]
+    running_indexes: [2, 8, 14]
