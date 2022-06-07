@@ -45,7 +45,7 @@ def _inceptionv3(model_config, image_shape=[256, 256]):
     Returns:
     An InceptionV3-based model.
     """
-    
+
     backbone = tf.keras.applications.InceptionV3(
         include_top=False,
         weights=model_config.get('weights', 'imagenet'),
