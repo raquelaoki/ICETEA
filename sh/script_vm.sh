@@ -14,9 +14,9 @@ pip3 --version
 #MY project
 python3 -m venv env
 source env/bin/activate
-#git clone --branch adding_kaggle https://github.com/raquelaoki/icetea
-git clone --branch clean_up https://github.com/raquelaoki/icetea
+git clone --branch adding_kaggle https://github.com/raquelaoki/icetea
 pip install -r icetea/requirements.txt
+git clone --branch clean_up https://github.com/raquelaoki/icetea
 #pip3 install --upgrade protobuf==3.19.0
 
 #from tensorflow.python.client import device_lib

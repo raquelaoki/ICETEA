@@ -103,7 +103,6 @@ def generate_simulations(path_root,
         mu1 = np.multiply(gamma, mu1)
         mu0 = np.multiply(gamma, mu0)
 
-
         mu1_ones = np.multiply(1 - gamma, mu1_ones)
         mu0_ones = np.multiply(1 - gamma, mu0_ones)
         mu1, mu0 = mu1 + mu1_ones, mu0 + mu0_ones

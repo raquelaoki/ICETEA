@@ -46,11 +46,17 @@ def _inceptionv3(model_config, image_shape=[256, 256]):
     An InceptionV3-based model.
     """
 
-    backbone = tf.keras.applications.InceptionV3(
+    # backbone = tf.keras.applications.InceptionV3(
+    #     include_top=False,
+    #     weights=model_config.get('weights', 'imagenet'),
+    #     input_shape=[*image_shape, 3],
+    # )
+    backbone = tf.keras.applications.ResNet50(
         include_top=False,
         weights=model_config.get('weights', 'imagenet'),
-        input_shape=[*image_shape, 3],
+        input_shape=(*IMAGE_SIZE, 3),
     )
+
     l2 = model_config.get('l2', None)
     kernel_regularizer = tf.keras.regularizers.L2(l2)
     model = tf.keras.Sequential([
