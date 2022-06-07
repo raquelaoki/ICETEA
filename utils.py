@@ -246,8 +246,8 @@ def _get_dataset_ps(dataset, batch_size):
         return batch0, batch1
 
     dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-    dataset = dataset.repeat()
     dataset = dataset.batch(batch_size).map(_preprocessing_ps)
+    dataset = dataset.repeat()
 
     return dataset
 

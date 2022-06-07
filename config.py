@@ -209,9 +209,9 @@ class _LogisticRegressionNN:
         epochs = 10
 
         self.model.summary()
-        self.model.fit(data, epochs=epochs, verbose=2)
+        self.model.fit(data, epochs=epochs, verbose=2, steps_per_epoch=20)
 
-    def predict_proba(self, data):
+    def predict_proba(self, data, step_lim=50):
         """Predict Probability of each class.
 
     Args:
@@ -224,8 +224,8 @@ class _LogisticRegressionNN:
         for i, (batch_x, batch_t) in enumerate(data):
             t_pred.append(self.model.predict_on_batch(batch_x))
             t.append(batch_t.numpy())
-            #if quick and i > 2000:
-            #    break
+            if step_lim > i:
+                break
 
         t_pred = np.concatenate(t_pred).ravel().reshape(-1, 2)
         return t_pred
