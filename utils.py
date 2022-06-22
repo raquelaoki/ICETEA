@@ -33,12 +33,17 @@ import tensorflow as tf
 from tensorflow.io import gfile
 import time
 
-
 # Local Import
 import helper_parameters as hp
 
-
 AUTOTUNE = tf.data.AUTOTUNE
+ATE_ESTIMATE = 'treatment_effect_hat'
+MSE_CONTROL = 'mse_control'
+MSE_TREATED = 'mse_treated'
+BIAS_CONTROL = 'bias_control'
+BIAS_TREATED = 'bias_treated'
+VARIANCE = 'variance'
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,7 +97,8 @@ def save_results(using_gc, params, results, i):
                     )
     else:
         with gfile.GFile(
-                os.path.join(os.path.join(params['path_root'], params['path_results']), params['output_name'] + str(i) + '.csv'),
+                os.path.join(os.path.join(params['path_root'], params['path_results']),
+                             params['output_name'] + str(i) + '.csv'),
                 'w') as out:
             out.write(results.to_csv(index=False))
 
@@ -148,31 +154,37 @@ def experiments(param_data, seed_data,
     param_method = hp.create_methods_obj(config=param_method, use_tpu=use_tpu, strategy=strategy)
     estimator = param_method['estimator']
     logger.debug('Fitting Estimator.')
-    tau_, mse, bias, var_tau = estimator(data=data,
-                                         param_method=param_method,
-                                         seed=seed_method)
-    tab = {
-        't_est': tau_,
-        'mse0': mse[0],
-        'mse1': mse[1],
-        'bias0': bias[0],
-        'bias1': bias[1],
-        'variance': var_tau,
-        'name': data.name,
-        'seed': seed_method,
-        'method_estimator': param_method['name_estimator'],
-        'method_base_model': param_method['name_base_model'],
-        'method_metric': param_method['name_metric'],
-        'model_repetition': model_repetition_index,
-        'time': time.time() - start,
-    }
-    return pd.DataFrame(tab, index=[0])
+    output_dict = estimator(data=data,
+                            param_method=param_method,
+                            seed=seed_method)
+    table = pd.DataFrame()
+    for method in output_dict.keys():
+        output = output_dict[method]
+        tab = {
+            ATE_ESTIMATE: output[ATE_ESTIMATE],
+            MSE_CONTROL: output[MSE_CONTROL],
+            MSE_TREATED: output[MSE_TREATED],
+            BIAS_CONTROL: output[BIAS_CONTROL],
+            BIAS_TREATED: output[BIAS_TREATED],
+            VARIANCE: output[VARIANCE],
+            'name': data.name,
+            'seed': seed_method,
+            'method_estimator': method,
+            'method_base_model': param_method['name_base_model'],
+            'method_metric': param_method['name_metric'],
+            'model_repetition': model_repetition_index,
+            'time': time.time() - start,
+        }
+        table = pd.concat([table, pd.DataFrame(tab, index=[0])])
+
+    return table
 
 
 class ImageData:
     """Loading image dataset.
     The path to the folder determines the type of outcome (clinical or simulated).
     """
+
     def __init__(self, seed, param_data):
         super(ImageData, self).__init__()
         self.name = param_data['name']
@@ -224,6 +236,7 @@ def _get_parse_example_fn(features):
     :param features: dict with features for the TFRecord.
     :return: _parse_example
     """
+
     def _parse_example(example):
         return tf.io.parse_single_example(example, features)
 
@@ -297,6 +310,7 @@ def _get_dataset_ps(dataset, batch_size):
     :param dataset: tf.data.Dataset TFRecord
     :return: dataset: tf.data.Dataset
     """
+
     def _preprocessing_ps(batch0, batch1):
         batch1 = tf.reshape(batch1, [-1])
         batch1 = tf.cast(batch1, tf.int32)

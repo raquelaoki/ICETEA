@@ -87,13 +87,15 @@ flags.DEFINE_bool('data_sim_allow_shift', False, 'Data Sim allow_shift: allows s
 flags.DEFINE_bool('causal_inference', False, 'Run Causal Inference.')
 flags.DEFINE_list('ci_epochs', [10], 'Base-models DNN epochs.')
 flags.DEFINE_list('ci_steps', [20], 'Base-models DNN steps.')
-#flags.DEFINE_list('ci_batch_size', [64], 'Base-models DNN batch_size.')
 flags.DEFINE_list('ci_name_estimator', ['aipw'], 'Causal Inference Estimator.')
 flags.DEFINE_list('ci_name_base_model', ['image_regression', 'resnet50', 'inceptionv3'], 'Base Models.')
 flags.DEFINE_list('ci_learn_prop_score', [False], 'Should a Prop Score Model be trained?')
 flags.DEFINE_list('ci_name_prop_score', ['LogisticRegression_NN'], 'Name Propensity Score (if training).')
 flags.DEFINE_list('ci_metric', ['mse'], 'Base models metrics.')
 flags.DEFINE_integer('ci_model_repetitions', 1, 'Model repetitions.')
+flags.DEFINE_list('ci_steps_predictions', [200], 'Number of batches used on the predictions.')
+flags.DEFINE_list('ci_level', [0.005], 'Propensity Score values are on the interval [ci_level,1-ci_level].')
+
 
 flags.DEFINE_string('output_name', 'result_', 'The csv file output_name.')
 flags.DEFINE_string('path_results', 'icetea_results/', 'Folder to save Causal Inference results.')
@@ -199,6 +201,9 @@ def main(_):
         param_method['name_prop_score'] = config_ci.get('name_prop_score', FLAGS.ci_name_prop_score)
         param_method['epochs'] = config_ci.get('epochs', FLAGS.ci_epochs)
         param_method['steps'] = config_ci.get('steps', FLAGS.ci_steps)
+        param_method['level'] = config_ci.get('level', FLAGS.ci_level)
+        param_method['steps_predictions'] = config_ci.get('steps_predictions', FLAGS.ci_steps_predictions)
+
         model_repetitions = config_ci.get('repetitions', FLAGS.ci_model_repetitions)
         hp.consistency_check_causal_methods(param_method)
 

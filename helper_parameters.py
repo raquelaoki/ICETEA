@@ -239,7 +239,7 @@ def _base_image_model_construction(model_config):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
         loss='mean_squared_error',
-        metrics=['mse', 'mae'])
+        metrics=['mse'])
 
     return model
 

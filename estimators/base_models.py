@@ -39,18 +39,19 @@ def image_model_image_regression(model_config):
     :return: model: tf.keras.Model.
     """
     # A simple linear regression implemented as NN.
-    last_activation = model_config.get('activation', 'linear')
+    last_activation = model_config.get('model_activation', 'linear')
     image_size = [model_config['image_size'], model_config['image_size']]
     inputs = tf.keras.Input(shape=[*image_size, 3], name='image_regression')
     x = tf.keras.layers.Flatten()(inputs)
-    outputs = tf.keras.layers.Dense(1, activation=last_activation, use_bias=True,
+    outputs = tf.keras.layers.Dense(1,
+                                    activation=last_activation,
+                                    use_bias=model_config.get('model_use_bias', 'True'),
                                     kernel_regularizer=regularizers.l1_l2(
-                                        l1=1e-5,
-                                        l2=1e-4),
-                                    bias_regularizer=regularizers.l2(1e-4),
-                                    activity_regularizer=regularizers.l2(1e-5))(x)
-    model = tf.keras.Model(
-        inputs=inputs, outputs=outputs, name='image_regression')
+                                        l1=model_config.get('model_kr_l1', 1e-5),
+                                        l2=model_config.get('model_kr_l2', 1e-4)),
+                                    bias_regularizer=regularizers.l2(model_config.get('model_br', 1e-4)),
+                                    activity_regularizer=regularizers.l2(model_config.get('model_ar', 1e-5)))(x)
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name='image_regression')
     return model
 
 
@@ -62,11 +63,10 @@ def image_model_inceptionv3(model_config):
     """
     last_activation = model_config.get('activation', 'linear')
     image_size = [model_config['image_size'], model_config['image_size']]
-    backbone = tf.keras.applications.InceptionV3(
-        include_top=False,
-        weights=model_config.get('weights', 'imagenet'),
-        input_shape=(*image_size, 3),
-        pooling=model_config.get('pooling', 'avg'))
+    backbone = tf.keras.applications.InceptionV3(include_top=False,
+                                                 weights=model_config.get('weights', 'imagenet'),
+                                                 input_shape=(*image_size, 3),
+                                                 pooling=model_config.get('pooling', 'avg'))
 
     backbone_drop_rate = model_config.get('backbone_drop_rate', 0.2)
 
@@ -92,11 +92,10 @@ def image_model_resnet50(model_config):
     """
     image_size = [model_config['image_size'], model_config['image_size']]
     last_activation = model_config.get('activation', 'linear')
-    backbone = tf.keras.applications.ResNet50(
-        include_top=False,
-        weights=model_config.get('weights', 'imagenet'),
-        input_shape=(*image_size, 3),
-        pooling=model_config.get('pooling', 'avg'),)
+    backbone = tf.keras.applications.ResNet50(include_top=False,
+                                              weights=model_config.get('weights', 'imagenet'),
+                                              input_shape=(*image_size, 3),
+                                              pooling=model_config.get('pooling', 'avg'), )
 
     backbone_drop_rate = model_config.get('backbone_drop_rate', 0.2)
 
