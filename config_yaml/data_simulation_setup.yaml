@@ -1,0 +1,7 @@
+parameters:
+    allow_shift: False
+    alpha_range: []
+    b: 20 # Dataset repetitions
+    beta_range: []
+    gamma_range: []
+    knobs: [False, False, False]  #knob_o,knob_h, knob_s  -> overlap, heterogeneity, scale.

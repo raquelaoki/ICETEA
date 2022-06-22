@@ -1,0 +1,16 @@
+tensorflow
+protobuf==3.19.0
+keras
+matplotlib
+numpy
+opencv-python
+pandas
+scikit-learn
+tensorboard
+opencv-python
+PyYAML
+fsspec==2022.5.0
+gcsfs==2022.5.0
+google-cloud-storage
+absl
+logging

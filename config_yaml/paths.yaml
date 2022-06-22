@@ -1,0 +1,8 @@
+parameters:
+    path_features: 'icetea_features'
+    path_images_png: 'icetea_png/train'
+    path_meta: 'trainLabels.csv'
+    path_results: 'icetea_results/'
+    path_root: 'data'  #ALL OTHER FOLDERS ARE UNDER path_root
+    path_tfrecords: 'icetea_tfr'
+    path_tfrecords_new: 'icetea_newdata/'
